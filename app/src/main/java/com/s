@@ -1,0 +1,298 @@
+package com.simplesound.app.ui.screens.settings
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.simplesound.app.ui.AppViewModel
+
+/**
+ * The Settings surface. A single scrollable list of categories, each one tap deep,
+ * matching the reference app's unhurried feel. Accent color lives on its own sub-page
+ * (a "tab" of settings); the rest are placeholders ready to be wired up later.
+ */
+@Composable
+fun SettingsScreen(
+    vm: AppViewModel,
+    onBack: () -> Unit,
+    onManageTabs: () -> Unit,
+    onAccentColor: () -> Unit
+) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.Rounded.ArrowBack,
+                        "Back",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Text(
+                    text = "Settings",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    ) { inner ->
+        LazyColumn(
+            modifier = Modifier
+                .padding(inner)
+                .fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                horizontal = 20.dp,
+                vertical = 8.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            // ---- Now playing ----
+            item { SectionLabel("Now playing") }
+            item {
+                SettingsRow(
+                    title = "Accent color",
+                    subtitle = "Choose the app's highlight color",
+                    onClick = onAccentColor
+                )
+            }
+            item {
+                SettingsRow(
+                    title = "Manage tabs",
+                    subtitle = "Choose which tabs appear and their order",
+                    onClick = onManageTabs
+                )
+            }
+            item { Spacer(Modifier.size(16.dp)) }
+
+            // ---- Playback ----
+            item { SectionLabel("Playback") }
+            item {
+                ToggleRow(
+                    title = "Crossfade",
+                    subtitle = "Smooth transitions between tracks",
+                    checked = false,
+                    onCheckedChange = { /* TODO */ }
+                )
+            }
+            item {
+                ToggleRow(
+                    title = "Gapless playback",
+                    subtitle = "Play tracks without pauses",
+                    checked = false,
+                    onCheckedChange = { /* TODO */ }
+                )
+            }
+            item {
+                SettingsRow(
+                    title = "Audio quality",
+                    subtitle = "Streaming and download quality",
+                    onClick = { /* TODO */ }
+                )
+            }
+            item {
+                ToggleRow(
+                    title = "Auto-download on Wi-Fi",
+                    subtitle = "Save new tracks for offline use",
+                    checked = false,
+                    onCheckedChange = { /* TODO */ }
+                )
+            }
+            item { Spacer(Modifier.size(16.dp)) }
+
+            // ---- Display ----
+            item { SectionLabel("Display") }
+            item {
+                SettingsRow(
+                    title = "Theme",
+                    subtitle = "Light, dark or system default",
+                    onClick = { /* TODO */ }
+                )
+            }
+            item {
+                SettingsRow(
+                    title = "Lock screen artwork",
+                    subtitle = "Show artwork on the lock screen",
+                    onClick = { /* TODO */ }
+                )
+            }
+            item {
+                ToggleRow(
+                    title = "Show track numbers",
+                    subtitle = "Number tracks in lists",
+                    checked = false,
+                    onCheckedChange = { /* TODO */ }
+                )
+            }
+            item { Spacer(Modifier.size(16.dp)) }
+
+            // ---- Notifications ----
+            item { SectionLabel("Notifications") }
+            item {
+                ToggleRow(
+                    title = "Playback notifications",
+                    subtitle = "Show play/pause controls in the shade",
+                    checked = true,
+                    onCheckedChange = { /* TODO */ }
+                )
+            }
+            item {
+                SettingsRow(
+                    title = "Notification channels",
+                    subtitle = "Manage which alerts you receive",
+                    onClick = { /* TODO */ }
+                )
+            }
+            item { Spacer(Modifier.size(16.dp)) }
+
+            // ---- Library ----
+            item { SectionLabel("Library") }
+            item {
+                SettingsRow(
+                    title = "Scan device for music",
+                    subtitle = "Re-scan your local library",
+                    onClick = { /* TODO */ }
+                )
+            }
+            item {
+                SettingsRow(
+                    title = "Excluded folders",
+                    subtitle = "Hide folders from your library",
+                    onClick = { /* TODO */ }
+                )
+            }
+            item {
+                SettingsRow(
+                    title = "Cache",
+                    subtitle = "Manage downloaded and cached media",
+                    onClick = { /* TODO */ }
+                )
+            }
+            item { Spacer(Modifier.size(16.dp)) }
+
+            // ---- About ----
+            item { SectionLabel("About") }
+            item {
+                SettingsRow(
+                    title = "About simpleSOUND",
+                    subtitle = "Version 0.1.0",
+                    onClick = { /* TODO */ }
+                )
+            }
+            item {
+                SettingsRow(
+                    title = "Open source licenses",
+                    subtitle = "View third-party licenses",
+                    onClick = { /* TODO */ }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+private fun SettingsRow(title: String, subtitle: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun ToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    var state by remember { mutableStateOf(checked) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { state = !state; onCheckedChange(state) }
+            .padding(horizontal = 12.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(checked = state, onCheckedChange = { state = it; onCheckedChange(it) })
+    }
+}

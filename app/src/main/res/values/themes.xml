@@ -1,0 +1,9 @@
+<resources>
+    <!-- Base platform theme; Compose owns the real theming. Forced dark surfaces. -->
+    <style name="Theme.SimpleSound" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ss_black</item>
+        <item name="android:statusBarColor">@color/ss_black</item>
+        <item name="android:navigationBarColor">@color/ss_black</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
