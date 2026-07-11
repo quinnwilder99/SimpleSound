@@ -1,107 +1,325 @@
 # simpleSOUND
 
-Made this because I am tired of bad and confusing MP3 players on the market. Jezz, I just need a good mp3 player, I don't need a whole compact studio on my phone just to play some Ye's song.
+> A clean, offline-first Android MP3 player built with Jetpack Compose and a modular architecture.
 
-A clean, dark-only Android MP3 player built with Jetpack Compose. The goal is a
-calm, "flagship" listening experience inspired by Samsung's native music player —
-no clutter, one accent color, roomy typography, and a tab strip you control.
+Made this because I am tired of bad and confusing MP3 players on the market. Jeez, I just need a good MP3 player — I don't need a whole compact studio on my phone just to play some Ye's songs.
 
-> Status: **v0.1** — core navigation, library, playlists, favorites, and the
-> Settings/Manage-tabs screens are in place. Playback is wired through Media3 and
-> the on-device library is scanned via MediaStore (with sample data fallback).
+SimpleSound is a dark-only Android music player focused on a calm, flagship listening experience inspired by Samsung's native music player. The goal is simplicity: no unnecessary features, no clutter, one accent color, roomy typography, and a tab system controlled by the user.
 
-## Features
+> Status: **v0.1** — Core navigation, library management, playlists, favorites, settings, and Media3 playback are implemented. The application uses a multi-module architecture with offline-first data management, dependency injection, and separated playback/UI layers.
 
-### Tabs (user-configurable)
-Six tabs are available; all can be toggled on/off and reordered in
-**Settings → Manage tabs**, except **Tracks**, which is always enabled (it can
-still be moved).
+---
 
-- **Favorites** — hearted tracks go into the always-present *Favorites tracks*
-  playlist; hearted playlists also surface here.
-- **Tracks** — every song on device. Sort by *Date added*, *Name*, *Artist*, or
-  *Length*.
-- **Playlists** — user-created playlists plus four native playlists
-  (*Recently added*, *Most played*, *Recently played*, *Favorites tracks*),
-  each capped at 100 tracks. Long-press a playlist to enter shake/drag mode and
-  pick **Play / Add / Share / Remove**.
-- **Albums** — grouped by album, with cover art.
-- **Artists** — grouped by artist, drilling into their tracks.
-- **Folders** — browse by filesystem folder.
+# Features
 
-### Playlists
-First-class entity: create, **rename**, and **change cover**. Reorder via
-long-press drag. Native playlists are auto-maintained and cannot be deleted.
+## Music Library
 
-### Theme
-Dark is the only theme — the app never renders a light surface. The single knob
-is the **accent color** (Teal, Violet, Coral, Amber, Rose, Lime, Sky, Sand),
-selectable in Settings. The accent drives the active tab, toggles, play button,
-and headers.
+* Automatically scans the device music library using MediaStore
+* Offline-first local music access
+* Sample-data fallback when no songs are available
+* Sort tracks by:
 
-## Tech stack
+  * Date added
+  * Name
+  * Artist
+  * Length
 
-| Layer | Choice |
-|---|---|
-| UI | Jetpack Compose + Material 3 |
-| Navigation | Navigation-Compose |
-| Playback | androidx.media3 (ExoPlayer + session) |
-| Persistence | DataStore Preferences (settings, tab config) |
-| Images | Coil |
-| Library | MediaStore scanner with sample-data fallback |
-| Min SDK | 26 (Android 8.0) |
-| Target SDK | 34 |
+## Tabs (User Configurable)
 
-## Project structure
+Six tabs are available and can be enabled, disabled, and reordered through:
 
 ```
-app/src/main/java/com/simplesound/app/
-├── MainActivity.kt              # entry point, permissions, theme + nav host
-├── SimpleSoundApp.kt            # Application; owns SettingsStore
-├── data/
-│   ├── MediaStoreScanner.kt     # on-device track discovery
-│   ├── MusicRepository.kt       # single source of truth for library/playlists
-│   ├── SampleData.kt           # fallback content when no permission/files
-│   ├── SettingsStore.kt         # accent + tab config persistence
-│   └── model/                   # Track, Playlist, Tab, SortOption
-├── playback/
-│   ├── PlaybackService.kt       # Media3 session
-│   └── PlayerController.kt     # local player handle
-├── ui/
-│   ├── AppViewModel.kt         # bridges settings + repository to Compose
-│   ├── HomeScreen.kt           # dynamic tab strip + content switch
-│   ├── LocalPlayer.kt         # CompositionLocal for PlayerController
-│   ├── components/             # MiniPlayer, TrackRow, PlaylistGridCard, …
-│   ├── navigation/             # SimpleSoundNavHost + Routes
-│   ├── screens/
-│   │   ├── albums/ artists/ folders/
-│   │   ├── favorites/          # Favorites tab
-│   │   ├── playlists/          # Playlists tab (grid + long-press)
-│   │   ├── playlistdetail/     # single playlist view
-│   │   ├── tracks/             # Tracks tab + sort header
-│   │   └── settings/           # SettingsScreen + ManageTabsScreen
-│   └── theme/                  # Color (AccentColor), Theme (dark-only), Type
-└── util/Format.kt
+Settings → Manage Tabs
 ```
 
-## Building
+Except **Tracks**, which is always enabled.
 
-This project uses the Gradle version catalog (`gradle/libs.versions.toml`).
-Open in Android Studio (Ladyfish or newer) and let it sync, or from a terminal
-with the Android SDK + a Gradle wrapper present:
+Available tabs:
+
+* **Favorites**
+
+  * Favorite tracks
+  * Favorite playlists
+
+* **Tracks**
+
+  * Complete device music library
+
+* **Playlists**
+
+  * User-created playlists
+  * Automatically maintained playlists:
+
+    * Recently added
+    * Most played
+    * Recently played
+    * Favorites tracks
+
+* **Albums**
+
+  * Album grouping with artwork
+
+* **Artists**
+
+  * Artist grouping with track browsing
+
+* **Folders**
+
+  * Filesystem-based browsing
+
+---
+
+# Playback
+
+Powered by AndroidX Media3.
+
+Features:
+
+* Background playback service
+* Media session integration
+* Persistent playback control
+* ExoPlayer-based audio engine
+
+---
+
+# Architecture
+
+SimpleSound uses a **multi-module Clean Architecture approach** to separate responsibilities, improve maintainability, and allow independent development of major components.
+
+## Module Structure
+
+```
+SimpleSound
+│
+├── app
+│   └── Application entry point
+│   └── Hilt initialization
+│   └── Android configuration
+│
+├── ui
+│   └── Jetpack Compose screens
+│   └── Navigation
+│   └── ViewModels
+│   └── UI components
+│
+├── data
+│   └── Repository layer
+│   └── MediaStore integration
+│   └── Room database
+│   └── DataStore preferences
+│
+├── playback
+│   └── Media3 / ExoPlayer integration
+│   └── PlaybackService
+│   └── PlayerController
+│
+└── core
+    └── Shared models
+    └── Common utilities
+    └── Theme definitions
+```
+
+## Module Dependency Flow
+
+```
+                 app
+                  |
+        ---------------------
+        |        |          |
+       ui      data     playback
+        |        |          |
+        -------- core -------
+```
+
+Responsibilities:
+
+### app
+
+Application bootstrap layer.
+
+Handles:
+
+* Application lifecycle
+* Hilt setup
+* Android entry points
+
+---
+
+### ui
+
+Responsible for:
+
+* Jetpack Compose UI
+* Screens
+* Navigation
+* ViewModels
+* User interactions
+
+The UI layer does not directly manage storage or playback.
+
+---
+
+### data
+
+Responsible for:
+
+* Local data sources
+* Repository pattern
+* Music library scanning
+* Persistence
+
+Uses:
+
+* Room
+* DataStore
+* MediaStore
+
+---
+
+### playback
+
+Responsible for:
+
+* Audio playback engine
+* Media3 integration
+* Background playback
+* Player lifecycle
+
+---
+
+### core
+
+Contains shared code used across modules:
+
+* Models
+* Constants
+* Utilities
+* Theme components
+
+---
+
+# Tech Stack
+
+| Layer                | Technology                      |
+| -------------------- | ------------------------------- |
+| Language             | Kotlin                          |
+| UI                   | Jetpack Compose + Material 3    |
+| Architecture         | Multi-module Clean Architecture |
+| Dependency Injection | Hilt                            |
+| Navigation           | Navigation Compose              |
+| Playback             | AndroidX Media3 + ExoPlayer     |
+| Database             | Room                            |
+| Preferences          | DataStore                       |
+| Async                | Kotlin Coroutines + Flow        |
+| Images               | Coil                            |
+| Library Scanner      | MediaStore                      |
+| Build System         | Gradle Kotlin DSL               |
+| Min SDK              | 26                              |
+| Target SDK           | 34                              |
+
+---
+
+# Design Principles
+
+## 1. Dark by default, forever
+
+SimpleSound intentionally uses a dark-only design.
+
+The app avoids:
+
+* Bright surfaces
+* Visual clutter
+* Excessive UI elements
+
+---
+
+## 2. One accent color
+
+The user chooses a single accent color:
+
+* Teal
+* Violet
+* Coral
+* Amber
+* Rose
+* Lime
+* Sky
+* Sand
+
+The accent drives:
+
+* Active tabs
+* Buttons
+* Toggles
+* Headers
+
+---
+
+## 3. Offline-first experience
+
+Music playback should not depend on the internet.
+
+The app prioritizes:
+
+* Local storage
+* Fast library access
+* Reliable playback
+* Persistent user settings
+
+---
+
+## 4. Modular by design
+
+The application is split into independent modules to:
+
+* Improve build times
+* Reduce coupling
+* Make testing easier
+* Separate feature ownership
+* Allow future expansion
+
+---
+
+# Building
+
+This project uses:
+
+* Gradle Kotlin DSL
+* Version Catalog (`gradle/libs.versions.toml`)
+
+Build debug APK:
 
 ```bash
 ./gradlew :app:assembleDebug
 ```
 
-> Note: the Gradle wrapper is not committed in this snapshot. Generate it with
-> `gradle wrapper` if you build from the command line.
+Run tests:
 
-## Design principles
+```bash
+./gradlew test
+```
 
-1. **Dark by default, forever.** True-black background, no light variant.
-2. **One accent.** A single user-chosen color carries every highlight.
-3. **Roomy, not overwhelming.** Large tab typography, generous spacing, no
-   secondary chrome competing for attention.
-4. **Tabs belong to the user.** Order and visibility are theirs — except Tracks,
-   which is the one guaranteed home for all music.
+Run lint:
+
+```bash
+./gradlew lint
+```
+
+---
+
+# Future Improvements
+
+Planned features:
+
+* Gapless playback
+* Crossfade transitions
+* Audio equalizer
+* Wear OS companion app
+* Home screen widget
+* Advanced playlist management
+
+---
+
+# License
+
+This project is currently a personal portfolio project.
