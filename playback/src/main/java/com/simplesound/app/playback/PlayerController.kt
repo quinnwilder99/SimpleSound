@@ -39,17 +39,56 @@ class PlayerController(private val context: Context) {
     private val _sleepTimerActive = MutableStateFlow(false)
     val sleepTimerActive: StateFlow<Boolean> = _sleepTimerActive.asStateFlow()
 
+    // ---- Progress / timeline ----
+    private val _positionMs = MutableStateFlow(0L)
+    val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
+
+    private val _durationMs = MutableStateFlow(0L)
+    val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
+
+    // ---- Shuffle / repeat ----
+    private val _isShuffleOn = MutableStateFlow(false)
+    val isShuffleOn: StateFlow<Boolean> = _isShuffleOn.asStateFlow()
+
+    /**
+     * 0 = off, 1 = repeat all, 2 = repeat one (A-B style track loop).
+     */
+    private val _repeatMode = MutableStateFlow(0)
+    val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private var sleepRunnable: Runnable? = null
+    private var progressRunnable: Runnable? = null
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
+            updateProgressPolling()
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val id = mediaItem?.mediaId
             if (id != null) _currentTrack.value = trackIndex[id]
+            _positionMs.value = 0L
+            _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
+        }
+
+        override fun onPlaybackStateChanged(state: Int) {
+            if (state == Player.STATE_READY || state == Player.STATE_ENDED) {
+                _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
+            }
+        }
+
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            _isShuffleOn.value = shuffleModeEnabled
+        }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            _repeatMode.value = when (repeatMode) {
+                Player.REPEAT_MODE_ONE -> 2
+                Player.REPEAT_MODE_ALL -> 1
+                else -> 0
+            }
         }
     }
 
@@ -59,10 +98,21 @@ class PlayerController(private val context: Context) {
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener({
             controller = future.get().also { it.addListener(listener) }
+            // Sync initial state
+            _isShuffleOn.value = controller?.shuffleModeEnabled == true
+            _repeatMode.value = when (controller?.repeatMode) {
+                Player.REPEAT_MODE_ONE -> 2
+                Player.REPEAT_MODE_ALL -> 1
+                else -> 0
+            }
+            _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
+            updateProgressPolling()
         }, ContextCompat.getMainExecutor(context))
     }
 
     fun release() {
+        progressRunnable?.let { mainHandler.removeCallbacks(it) }
+        progressRunnable = null
         controller?.removeListener(listener)
         controller?.release()
         controller = null
@@ -104,6 +154,30 @@ class PlayerController(private val context: Context) {
     fun next() { controller?.seekToNextMediaItem() }
     fun previous() { controller?.seekToPreviousMediaItem() }
 
+    /** Seek to [positionMs] within the current track. */
+    fun seekTo(positionMs: Long) {
+        controller?.seekTo(positionMs.coerceAtLeast(0))
+        _positionMs.value = positionMs.coerceAtLeast(0)
+    }
+
+    /** Toggle shuffle on/off. */
+    fun toggleShuffle() {
+        val c = controller ?: return
+        c.shuffleModeEnabled = !c.shuffleModeEnabled
+    }
+
+    /**
+     * Cycle repeat mode: off -> repeat all -> repeat one (A-B) -> off.
+     */
+    fun cycleRepeatMode() {
+        val c = controller ?: return
+        c.repeatMode = when (c.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+    }
+
     /** Set playback speed (0.25x–4.0x clamped). 1.0f is normal speed. */
     fun setSpeed(speed: Float) {
         val s = speed.coerceIn(0.25f, 4.0f)
@@ -133,5 +207,22 @@ class PlayerController(private val context: Context) {
         sleepRunnable?.let { mainHandler.removeCallbacks(it) }
         sleepRunnable = null
         _sleepTimerActive.value = false
+    }
+
+    private fun updateProgressPolling() {
+        progressRunnable?.let { mainHandler.removeCallbacks(it) }
+        if (_isPlaying.value) {
+            val r = object : Runnable {
+                override fun run() {
+                    val c = controller ?: return
+                    _positionMs.value = c.currentPosition.coerceAtLeast(0)
+                    val d = c.duration
+                    if (d > 0) _durationMs.value = d
+                    mainHandler.postDelayed(this, 500L)
+                }
+            }
+            progressRunnable = r
+            mainHandler.post(r)
+        }
     }
 }
