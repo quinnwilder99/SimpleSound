@@ -180,7 +180,7 @@ class PlayerController(private val context: Context) {
 
     /** Set playback speed (0.25x–4.0x clamped). 1.0f is normal speed. */
     fun setSpeed(speed: Float) {
-        val s = speed.coerceIn(0.25f, 4.0f)
+        val s = speed.coerceIn(0.1f, 2.0f)
         _playbackSpeed.value = s
         controller?.playbackParameters = PlaybackParameters(s, 1.0f)
     }

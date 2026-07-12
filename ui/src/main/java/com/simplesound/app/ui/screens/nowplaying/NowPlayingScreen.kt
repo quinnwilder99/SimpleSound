@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -13,8 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Favorite
@@ -29,13 +31,19 @@ import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,11 +90,13 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
     val durationMs by player.durationMs.collectAsStateWithLifecycle()
     val isShuffleOn by player.isShuffleOn.collectAsStateWithLifecycle()
     val repeatMode by player.repeatMode.collectAsStateWithLifecycle()
+    val playbackSpeed by player.playbackSpeed.collectAsStateWithLifecycle()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showActionsSheet by remember { mutableStateOf(false) }
     var deleteTrack by remember { mutableStateOf(false) }
     var detailsTrack by remember { mutableStateOf(false) }
+    var showSpeedSheet by remember { mutableStateOf(false) }
     var seekingValue by remember { mutableStateOf<Float?>(null) }
 
     Scaffold(
@@ -112,11 +122,12 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { /* reserved: playback speed sheet */ }) {
+                IconButton(onClick = { showSpeedSheet = true }) {
                     Icon(
                         Icons.Rounded.Speed,
                         contentDescription = "Playback speed",
-                        tint = MaterialTheme.colorScheme.onBackground
+                        tint = if (playbackSpeed != 1.0f) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onBackground
                     )
                 }
                 IconButton(onClick = { showActionsSheet = true }) {
@@ -335,6 +346,91 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
     }
     if (detailsTrack && current != null) {
         TrackDetailsDialog(track = current, onDismiss = { detailsTrack = false })
+    }
+    if (showSpeedSheet) {
+        PlaybackSpeedSheet(
+            currentSpeed = playbackSpeed,
+            onSpeedChange = { player.setSpeed(it) },
+            onDismiss = { showSpeedSheet = false }
+        )
+    }
+}
+
+/**
+ * Bottom sheet for adjusting playback speed (0.1x to 2.0x). A slider is paired with
+ * preset chips for quick jumps; 1.0x is highlighted and starts the row.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun PlaybackSpeedSheet(
+    currentSpeed: Float,
+    onSpeedChange: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Playback speed",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "%.1fx".format(currentSpeed),
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (currentSpeed == 1.0f) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(16.dp))
+            val presets = listOf(0.1f, 0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                presets.forEach { preset ->
+                    val isSelected = (currentSpeed - preset).let { it >= -0.001f && it <= 0.001f }
+                    AssistChip(
+                        onClick = { onSpeedChange(preset) },
+                        label = { Text("%.2fx".format(preset)) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            labelColor = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Slider(
+                value = currentSpeed,
+                onValueChange = { onSpeedChange(it) },
+                valueRange = 0.1f..2.0f,
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary
+                )
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = { onSpeedChange(1.0f) }) {
+                    Text("Reset to 1.0x")
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
     }
 }
 
