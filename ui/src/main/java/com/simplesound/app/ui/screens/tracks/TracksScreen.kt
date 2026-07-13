@@ -1,6 +1,7 @@
-package com.simplesound.app.ui.screens.tracks
+﻿package com.simplesound.app.ui.screens.tracks
 
 import android.content.Intent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -11,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -21,7 +23,10 @@ import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
+import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
 import com.simplesound.app.ui.components.DeleteTrackDialog
+import com.simplesound.app.ui.components.DeleteTracksDialog
+import com.simplesound.app.ui.components.SelectionActionBar
 import com.simplesound.app.ui.components.SortHeader
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
@@ -40,32 +45,77 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
     var sort by remember { mutableStateOf(SortOption.DATE_ADDED) }
     val sorted = remember(allTracks, sort) { vm.sortedTracks(sort) }
 
+    // ---- Single-track actions ----
     var sheetTrack by remember { mutableStateOf<Track?>(null) }
     var addTrack by remember { mutableStateOf<Track?>(null) }
     var deleteTrack by remember { mutableStateOf<Track?>(null) }
     var detailsTrack by remember { mutableStateOf<Track?>(null) }
 
-    Column(Modifier.fillMaxSize()) {
-        SortHeader(
-            current = sort,
-            onSort = { sort = it },
-            onShuffle = { player.playQueue(sorted.shuffled(), 0) },
-            onPlayAll = { player.playQueue(sorted, 0) }
-        )
-        LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp)) {
-            items(sorted, key = { it.id }) { track ->
-                TrackRow(
-                    track = track,
-                    onClick = {
-                        player.playQueue(sorted, sorted.indexOf(track))
-                        onOpenNowPlaying()
-                    },
-                    onMore = { sheetTrack = track }
-                )
-            }
-        }
+    // ---- Multi-selection state ----
+    var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
+    val selectionMode = selectedIds.isNotEmpty()
+    var showAddMany by remember { mutableStateOf(false) }
+    var showDeleteMany by remember { mutableStateOf(false) }
+
+    val selectedTracks: List<Track> = remember(selectedIds, sorted) {
+        val byId = sorted.associateBy { it.id }
+        selectedIds.mapNotNull { byId[it] }
     }
 
+    fun toggleSelected(id: Long) {
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+    }
+    fun clearSelection() { selectedIds = emptySet() }
+
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            SortHeader(
+                current = sort,
+                onSort = { sort = it },
+                onShuffle = { player.playQueue(sorted.shuffled(), 0) },
+                onPlayAll = { player.playQueue(sorted, 0) }
+            )
+            LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 160.dp)) {
+                items(sorted, key = { it.id }) { track ->
+                    val selected = track.id in selectedIds
+                    TrackRow(
+                        track = track,
+                        selectionMode = selectionMode,
+                        selected = selected,
+                        onLongClick = { toggleSelected(track.id) },
+                        onClick = {
+                            if (selectionMode) {
+                                toggleSelected(track.id)
+                            } else {
+                                player.playQueue(sorted, sorted.indexOf(track))
+                                onOpenNowPlaying()
+                            }
+                        },
+                        onMore = { sheetTrack = track }
+                    )
+                }
+            }
+        }
+
+        // Bottom navigator popup that rises from the bottom of the screen.
+        SelectionActionBar(
+            selectedCount = selectedIds.size,
+            onPlay = {
+                if (selectedTracks.isNotEmpty()) {
+                    // Temp queue only â€” not persisted as a playlist.
+                    player.playQueue(selectedTracks, 0)
+                    onOpenNowPlaying()
+                    clearSelection()
+                }
+            },
+            onAdd = { showAddMany = true },
+            onDelete = { showDeleteMany = true },
+            onClear = { clearSelection() },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+    }
+
+    // ---- Single-track sheet & dialogs ----
     sheetTrack?.let { t ->
         TrackActionsSheet(
             track = t,
@@ -98,6 +148,37 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
 
     detailsTrack?.let { t ->
         TrackDetailsDialog(track = t, onDismiss = { detailsTrack = null })
+    }
+
+    // ---- Multi-track dialogs ----
+    if (showAddMany && selectedIds.isNotEmpty()) {
+        AddTracksToPlaylistDialog(
+            playlists = userPlaylists,
+            pickedCount = selectedIds.size,
+            onAddToExisting = { pl ->
+                vm.addTracksToPlaylist(pl.id, selectedIds.toList())
+                clearSelection()
+                showAddMany = false
+            },
+            onCreateNew = { name ->
+                vm.createPlaylist(name, selectedIds.toList())
+                clearSelection()
+                showAddMany = false
+            },
+            onDismiss = { showAddMany = false }
+        )
+    }
+
+    if (showDeleteMany && selectedIds.isNotEmpty()) {
+        DeleteTracksDialog(
+            count = selectedIds.size,
+            onConfirm = {
+                vm.deleteTracks(selectedIds.toList())
+                clearSelection()
+                showDeleteMany = false
+            },
+            onDismiss = { showDeleteMany = false }
+        )
     }
 }
 

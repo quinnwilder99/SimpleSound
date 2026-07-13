@@ -160,6 +160,18 @@ object MusicRepository {
         recomputeFavorites()
     }
 
+    /** Permanently remove several tracks at once from the library, playlists, and favorites. */
+    fun deleteTracks(trackIds: List<Long>) {
+        if (trackIds.isEmpty()) return
+        val ids = trackIds.toSet()
+        _tracks.value = _tracks.value.filterNot { it.id in ids }
+        _favoriteTrackIds.value = _favoriteTrackIds.value.filterNot { it in ids }.toSet()
+        _userPlaylists.value = _userPlaylists.value.map { pl ->
+            pl.copy(trackIds = pl.trackIds.filterNot { it in ids })
+        }
+        recomputeFavorites()
+    }
+
     /** Persist a custom drag-reorder of the user playlists. */
     fun reorderPlaylists(orderedIds: List<String>) {
         val byId = _userPlaylists.value.associateBy { it.id }

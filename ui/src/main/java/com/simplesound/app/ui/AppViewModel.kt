@@ -60,6 +60,7 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
     fun addTracksToPlaylist(id: String, ids: List<Long>) = MusicRepository.addTracksToPlaylist(id, ids)
     fun deletePlaylist(id: String) = MusicRepository.deletePlaylist(id)
     fun deleteTrack(trackId: Long) = MusicRepository.deleteTrack(trackId)
+    fun deleteTracks(trackIds: List<Long>) = MusicRepository.deleteTracks(trackIds)
     fun reorderPlaylists(orderedIds: List<String>) = MusicRepository.reorderPlaylists(orderedIds)
     fun nativePlaylists() = MusicRepository.nativePlaylists()
     fun playlistById(id: String) = MusicRepository.playlistById(id)
