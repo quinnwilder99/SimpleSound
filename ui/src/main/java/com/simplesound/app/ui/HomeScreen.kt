@@ -79,7 +79,7 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
                             Icon(Icons.Rounded.Add, "New playlist", tint = MaterialTheme.colorScheme.primary)
                         }
                     }
-                    IconButton(onClick = { }) {
+                    IconButton(onClick = { navController.navigate(Routes.SEARCH) }) {
                         Icon(Icons.Rounded.Search, "Search", tint = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = { navController.navigate(Routes.SETTINGS) }) {

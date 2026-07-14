@@ -50,6 +50,7 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
 
     // ---- Library / playlist passthroughs ----
     fun sortedTracks(option: SortOption) = MusicRepository.sortedTracks(option)
+    fun searchTracks(query: String) = MusicRepository.searchTracks(query)
     fun isFavorite(trackId: Long) = MusicRepository.isFavorite(trackId)
     fun toggleFavoriteTrack(trackId: Long) = MusicRepository.toggleFavoriteTrack(trackId)
     fun toggleFavoritePlaylist(id: String) = MusicRepository.toggleFavoritePlaylist(id)

@@ -9,6 +9,7 @@ import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.HomeScreen
 import com.simplesound.app.ui.screens.nowplaying.NowPlayingScreen
 import com.simplesound.app.ui.screens.playlistdetail.PlaylistDetailScreen
+import com.simplesound.app.ui.screens.search.SearchScreen
 import com.simplesound.app.ui.screens.settings.AccentColorScreen
 import com.simplesound.app.ui.screens.settings.ManageTabsScreen
 import com.simplesound.app.ui.screens.settings.SettingsScreen
@@ -23,6 +24,7 @@ object Routes {
     const val SLEEP_TIMER = "sleep_timer"
     const val PLAYLIST = "playlist"
     const val NOW_PLAYING = "now_playing"
+    const val SEARCH = "search"
     fun playlist(id: String) = "$PLAYLIST/$id"
 }
 
@@ -64,6 +66,13 @@ fun SimpleSoundNavHost(
         }
         composable(Routes.NOW_PLAYING) {
             NowPlayingScreen(vm = vm, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.SEARCH) {
+            SearchScreen(
+                vm = vm,
+                onBack = { navController.popBackStack() },
+                onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) }
+            )
         }
     }
 }

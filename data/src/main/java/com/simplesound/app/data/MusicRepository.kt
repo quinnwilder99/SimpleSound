@@ -54,6 +54,22 @@ object MusicRepository {
         }
     )
 
+    /**
+     * Filter the library by a free-text [query]. Matches are case-insensitive and
+     * evaluated against the track's title, artist, and album. Blank queries return
+     * every track so the search screen can show the full library before typing.
+     */
+    fun searchTracks(query: String): List<Track> {
+        val q = query.trim()
+        if (q.isEmpty()) return _tracks.value
+        val needle = q.lowercase()
+        return _tracks.value.filter {
+            it.title.lowercase().contains(needle) ||
+                it.artist.lowercase().contains(needle) ||
+                it.album.lowercase().contains(needle)
+        }
+    }
+
     // ---------- Favorites (single tracks) ----------
 
     fun isFavorite(trackId: Long): Boolean = trackId in _favoriteTrackIds.value
