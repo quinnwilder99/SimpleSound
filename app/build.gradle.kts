@@ -70,6 +70,10 @@ dependencies {
     implementation(libs.androidx.ui)
     debugImplementation(libs.androidx.ui.tooling)
 
+    // Coil — used to configure the process-wide ImageLoader in
+    // SimpleSoundApp for album art and the static PNG fallback.
+    implementation(libs.coil.compose)
+
     // Hilt - dependency injection (configured for future use; not yet annotated in source).
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

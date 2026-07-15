@@ -1,6 +1,12 @@
 package com.simplesound.app.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -33,7 +39,12 @@ fun SimpleSoundNavHost(
     vm: AppViewModel,
     navController: NavHostController = rememberNavController()
 ) {
-    NavHost(navController = navController, startDestination = Routes.HOME) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
+    ) {
+        NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeScreen(vm = vm, navController = navController)
         }
@@ -73,6 +84,7 @@ fun SimpleSoundNavHost(
                 onBack = { navController.popBackStack() },
                 onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) }
             )
+        }
         }
     }
 }

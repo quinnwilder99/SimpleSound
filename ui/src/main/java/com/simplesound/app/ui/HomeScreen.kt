@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -21,11 +23,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,17 +45,38 @@ import com.simplesound.app.ui.screens.favorites.FavoritesScreen
 import com.simplesound.app.ui.screens.folders.FoldersScreen
 import com.simplesound.app.ui.screens.playlists.PlaylistsScreen
 import com.simplesound.app.ui.screens.tracks.TracksScreen
+import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
     val tabSettings by vm.tabSettings.collectAsStateWithLifecycle()
     val enabledTabs = remember(tabSettings) { tabSettings.filter { it.enabled }.map { it.tab } }
 
-    var selected by rememberSaveable { mutableStateOf(Tab.TRACKS.name) }
-    val selectedTab = enabledTabs.firstOrNull { it.name == selected }
-        ?: enabledTabs.firstOrNull { it == Tab.TRACKS }
-        ?: enabledTabs.firstOrNull()
+    // Tabs can be enabled/disabled in Manage Tabs. Re-create the pager whenever the
+    // set of enabled tabs changes so page indices always line up with `enabledTabs`.
+    val pagerState = rememberPagerState(pageCount = { enabledTabs.size })
+    val scope = rememberCoroutineScope()
+
+    // Default selection: Tracks if it's enabled, otherwise the first enabled tab,
+    // otherwise (degenerate) Tracks so the UI always has something to show.
+    val firstTabIndex = remember(enabledTabs) {
+        enabledTabs.indexOfFirst { it == Tab.TRACKS }.takeIf { it >= 0 } ?: 0
+    }
+
+    // Resolve the currently selected tab from the pager's page, falling back to a
+    // sane default when the tab set changes underneath us.
+    val selectedTab = enabledTabs.getOrNull(pagerState.currentPage)
+        ?: enabledTabs.getOrNull(firstTabIndex)
         ?: Tab.TRACKS
+
+    // When the set of enabled tabs changes (e.g. entering via a fresh launch or
+    // returning from Manage Tabs), snap the pager to the default page so it never
+    // points at an out-of-range index.
+    LaunchedEffect(enabledTabs) {
+        if (pagerState.currentPage !in enabledTabs.indices && enabledTabs.isNotEmpty()) {
+            pagerState.scrollToPage(firstTabIndex)
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         GlowBackground(accent = MaterialTheme.colorScheme.primary)
@@ -92,26 +114,42 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    enabledTabs.forEach { tab ->
+                    enabledTabs.forEachIndexed { index, tab ->
                         val active = tab == selectedTab
                         Text(
                             text = tab.label,
                             style = if (active) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleLarge,
                             color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).clickable { selected = tab.name }.padding(vertical = 4.dp, horizontal = 2.dp)
+                            modifier = Modifier
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                                .clickable {
+                                    // Tapping a tab animates the pager to that page; the pager's
+                                    // currentPage change drives `selectedTab` via the composable
+                                    // recompute above, so we don't need to set selection here.
+                                    scope.launch { pagerState.animateScrollToPage(index) }
+                                }
+                                .padding(vertical = 4.dp, horizontal = 2.dp)
                         )
                     }
                 }
 
-                Box(Modifier.fillMaxSize()) {
-                    when (selectedTab) {
-                        Tab.FAVORITES -> FavoritesScreen(vm, navController)
-                        Tab.TRACKS -> TracksScreen(vm, onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) })
-                        Tab.PLAYLISTS -> PlaylistsScreen(vm, navController)
-                        Tab.ALBUMS -> AlbumsScreen(vm)
-                        Tab.ARTISTS -> ArtistsScreen(vm)
-                        Tab.FOLDERS -> FoldersScreen(vm)
+                // Swipe between enabled tabs. Each page is its own screen so vertical
+                // scrolling inside a tab (e.g. long track lists) keeps working.
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    val tab = enabledTabs.getOrNull(page) ?: Tab.TRACKS
+                    Box(Modifier.fillMaxSize()) {
+                        when (tab) {
+                            Tab.FAVORITES -> FavoritesScreen(vm, navController)
+                            Tab.TRACKS -> TracksScreen(vm, onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) })
+                            Tab.PLAYLISTS -> PlaylistsScreen(vm, navController)
+                            Tab.ALBUMS -> AlbumsScreen(vm)
+                            Tab.ARTISTS -> ArtistsScreen(vm)
+                            Tab.FOLDERS -> FoldersScreen(vm)
+                        }
                     }
                 }
             }
