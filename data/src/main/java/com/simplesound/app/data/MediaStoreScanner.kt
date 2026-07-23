@@ -3,6 +3,7 @@ package com.simplesound.app.data
 import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
+import android.util.Log
 import com.simplesound.app.data.model.Track
 import java.io.File
 
@@ -10,8 +11,27 @@ import java.io.File
  * Reads the device's audio library from MediaStore. Requires the READ_MEDIA_AUDIO
  * (API 33+) or READ_EXTERNAL_STORAGE permission to be granted; if not granted or
  * empty, callers fall back to [SampleData].
+ *
+ * ---- Artwork strategy ----
+ *
+ * `uri` = the track's own MediaStore content URI:
+ *     content://media/external/audio/media/<trackId>
+ * This is what the player uses for playback AND what the UI uses to decode the
+ * track's *embedded* artwork (ID3 APIC / FLAC picture) via
+ * `MediaMetadataRetriever.getEmbeddedPicture()`. Embedded art is per-track, so
+ * it is the only source that guarantees one track -> one unique cover.
+ *
+ * `albumArtUri` = the legacy album-level URI, kept only as a fallback for tracks
+ * with no embedded picture:
+ *     content://media/external/audio/albumart/<albumId>
+ * NOTE: this album-level URI does NOT reflect per-track embedded art and is
+ * unreliable on several OEM builds (Samsung/Xiaomi/Oppo/Vivo), which is exactly
+ * why it must never be the primary artwork source. The UI layer tries embedded
+ * art first and only falls back to this when no embedded picture exists.
  */
 object MediaStoreScanner {
+
+    private const val TAG = "MediaStoreScanner"
 
     fun scan(context: Context): List<Track> {
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -45,9 +65,20 @@ object MediaStoreScanner {
                 val folder = File(path).parentFile?.name ?: ""
                 val contentUri = ContentUris.withAppendedId(collection, id).toString()
                 val albumId = c.getLong(albumIdCol)
-                val artUri = ContentUris.withAppendedId(
+                // Album-level fallback only. Embedded (per-track) art is read
+                // from `uri`/`contentUri` by the UI via MediaMetadataRetriever.
+                val albumArtUri = ContentUris.withAppendedId(
                     android.net.Uri.parse("content://media/external/audio/albumart"), albumId
                 ).toString()
+
+                // Diagnostic log: trackId, albumId, content uri (embedded-art
+                // source), and the album-level fallback uri. Inspect in logcat
+                // (tag = MediaStoreScanner) to confirm two different track ids
+                // do not collapse to the same embedded/album art.
+                Log.d(
+                    TAG,
+                    "trackId=$id albumId=$albumId uri=$contentUri albumArtUri=$albumArtUri title=${c.getString(titleCol)}"
+                )
 
                 result += Track(
                     id = id,
@@ -56,7 +87,7 @@ object MediaStoreScanner {
                     album = c.getString(albumCol).orEmpty(),
                     durationMs = c.getLong(durationCol),
                     uri = contentUri,
-                    albumArtUri = artUri,
+                    albumArtUri = albumArtUri,
                     folder = folder,
                     dateAddedSec = c.getLong(dateCol)
                 )

@@ -58,7 +58,14 @@ fun TrackRow(
                     modifier = Modifier.size(30.dp)
                 )
             } else {
-                Artwork(uri = track.albumArtUri, modifier = Modifier.size(52.dp))
+                // embeddedSource = track.uri so Artwork decodes the per-track
+                // embedded picture (ID3 APIC) first; track.albumArtUri is the
+                // album-level fallback when no embedded art exists.
+                Artwork(
+                    uri = track.albumArtUri,
+                    embeddedSource = track.uri,
+                    modifier = Modifier.size(52.dp)
+                )
             }
         }
         Spacer(Modifier.width(14.dp))
