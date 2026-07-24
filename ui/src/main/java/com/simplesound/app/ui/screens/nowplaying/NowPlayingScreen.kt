@@ -151,8 +151,12 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
             } else {
                 Spacer(Modifier.weight(0.6f))
                 // 2) ALBUM ART + METADATA
+                // Pass the track's MediaStore URI as embeddedSource so Artwork
+                // decodes the per-track embedded picture (ID3 APIC) first, just
+                // like TrackRow does; track.albumArtUri is the album-level fallback.
                 Artwork(
                     uri = current.albumArtUri,
+                    embeddedSource = current.uri,
                     modifier = Modifier.fillMaxWidth().aspectRatio(1f),
                     corner = 24.dp,
                     iconSize = 96.dp
