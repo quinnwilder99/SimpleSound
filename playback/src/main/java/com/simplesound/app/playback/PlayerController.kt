@@ -27,6 +27,19 @@ class PlayerController(private val context: Context) {
     private var controller: MediaController? = null
     private val trackIndex = mutableMapOf<String, Track>()
 
+    // ---- Temp queue ----
+    // The ordered list of tracks currently loaded into the player, plus the index
+    // of the playing item. This is a *temp* queue: reordering it here does not
+    // modify the source playlist/all-tracks list it was built from.
+    private val _queue = MutableStateFlow<List<Track>>(emptyList())
+    val queue: StateFlow<List<Track>> = _queue.asStateFlow()
+
+    private val _queueTitle = MutableStateFlow("")
+    val queueTitle: StateFlow<String> = _queueTitle.asStateFlow()
+
+    private val _queueIndex = MutableStateFlow(-1)
+    val queueIndex: StateFlow<Int> = _queueIndex.asStateFlow()
+
     private val _currentTrack = MutableStateFlow<Track?>(null)
     val currentTrack: StateFlow<Track?> = _currentTrack.asStateFlow()
 
@@ -69,6 +82,8 @@ class PlayerController(private val context: Context) {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val id = mediaItem?.mediaId
             if (id != null) _currentTrack.value = trackIndex[id]
+            // Keep the queue index in sync with the player's current window index.
+            _queueIndex.value = controller?.currentMediaItemIndex ?: -1
             _positionMs.value = 0L
             _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
         }
@@ -118,8 +133,14 @@ class PlayerController(private val context: Context) {
         controller = null
     }
 
-    /** Play [tracks] starting at [startIndex], replacing the current queue. */
-    fun playQueue(tracks: List<Track>, startIndex: Int = 0) {
+    /**
+     * Play [tracks] starting at [startIndex], replacing the current queue.
+     *
+     * @param sourceTitle Optional label describing where this queue came from
+     * (e.g. the playlist name, "All tracks", or "Queue"). Surfaced in the
+     * Now Playing queue sheet so the user knows the context the track came from.
+     */
+    fun playQueue(tracks: List<Track>, startIndex: Int = 0, sourceTitle: String = "") {
         val c = controller ?: return
         if (tracks.isEmpty()) return
         trackIndex.clear()
@@ -138,13 +159,18 @@ class PlayerController(private val context: Context) {
                 )
                 .build()
         }
-        c.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0L)
+        val safeIndex = startIndex.coerceIn(0, items.lastIndex)
+        c.setMediaItems(items, safeIndex, 0L)
         c.prepare()
         c.play()
-        _currentTrack.value = tracks[startIndex.coerceIn(0, tracks.lastIndex)]
+        // Track the temp queue for the Now Playing queue sheet.
+        _queue.value = tracks
+        _queueTitle.value = sourceTitle
+        _queueIndex.value = safeIndex
+        _currentTrack.value = tracks[safeIndex]
     }
 
-    fun playSingle(track: Track) = playQueue(listOf(track), 0)
+    fun playSingle(track: Track) = playQueue(listOf(track), 0, "Queue")
 
     fun togglePlayPause() {
         val c = controller ?: return
@@ -153,6 +179,86 @@ class PlayerController(private val context: Context) {
 
     fun next() { controller?.seekToNextMediaItem() }
     fun previous() { controller?.seekToPreviousMediaItem() }
+
+    /**
+     * Jump to the queue item at [index] without rebuilding the queue. The temp
+     * queue order is preserved; only the playing item changes.
+     */
+    fun playQueueItemAt(index: Int) {
+        val c = controller ?: return
+        val q = _queue.value
+        if (index !in q.indices) return
+        c.seekToDefaultPosition(index)
+        _queueIndex.value = index
+        _currentTrack.value = q[index]
+        c.play()
+    }
+
+    /**
+     * Move a queue item from [from] to [to] in the temp queue. The Media3
+     * controller's media items are reordered to match; playback of the current
+     * track continues uninterrupted. The "currently playing" index is updated to
+     * follow the moved item if needed.
+     */
+    fun moveQueueItem(from: Int, to: Int) {
+        val c = controller
+        val q = _queue.value.toMutableList()
+        if (from !in q.indices || to !in q.indices) return
+        val item = q.removeAt(from)
+        q.add(to, item)
+        _queue.value = q
+        // Rebuild the Media3 queue at the new order while keeping the playing
+        // window position correct.
+        val currentTrackId = _currentTrack.value?.id
+        trackIndex.clear()
+        val items = q.map { track ->
+            trackIndex[track.id.toString()] = track
+            MediaItem.Builder()
+                .setMediaId(track.id.toString())
+                .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(track.title)
+                        .setArtist(track.artistOrUnknown)
+                        .setAlbumTitle(track.albumOrUnknown)
+                        .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
+                        .build()
+                )
+                .build()
+        }
+        if (c != null) {
+            val newIndex = q.indexOfFirst { it.id == currentTrackId }.takeIf { it >= 0 } ?: 0
+            val pos = c.currentPosition.coerceAtLeast(0)
+            c.setMediaItems(items, newIndex, pos)
+            _queueIndex.value = newIndex
+        }
+    }
+
+    /**
+     * Remove the item at [index] from the temp queue. If it is the current item,
+     * the player advances to the next available item (or stops if the queue is
+     * emptied). Does not affect the source playlist/all-tracks list.
+     */
+    fun removeQueueItem(index: Int) {
+        val c = controller
+        val q = _queue.value.toMutableList()
+        if (index !in q.indices) return
+        val removed = q.removeAt(index)
+        _queue.value = q
+        trackIndex.remove(removed.id.toString())
+        if (c != null) {
+            c.removeMediaItem(index)
+            if (q.isEmpty()) {
+                _queueIndex.value = -1
+                _currentTrack.value = null
+                c.stop()
+            } else {
+                _queueIndex.value = c.currentMediaItemIndex
+                val mid = c.currentMediaItem?.mediaId
+                _currentTrack.value = if (mid != null) trackIndex[mid] else _currentTrack.value
+            }
+        }
+    }
 
     /** Seek to [positionMs] within the current track. */
     fun seekTo(positionMs: Long) {

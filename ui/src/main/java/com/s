@@ -65,8 +65,8 @@ import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.Artwork
 import com.simplesound.app.ui.components.DeleteTrackDialog
-import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.QueueSheet
+import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import java.io.File
 
@@ -367,12 +367,12 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
     }
     if (showQueueSheet) {
         QueueSheet(
-            queue = queue,
+            title = queueTitle,
+            tracks = queue,
             currentIndex = queueIndex,
-            queueTitle = queueTitle,
-            onPlay = { index -> player.playQueueItemAt(index) },
+            onPlayAt = { player.playQueueItemAt(it) },
             onMove = { from, to -> player.moveQueueItem(from, to) },
-            onRemove = { index -> player.removeQueueItem(index) },
+            onRemove = { player.removeQueueItem(it) },
             onDismiss = { showQueueSheet = false }
         )
     }

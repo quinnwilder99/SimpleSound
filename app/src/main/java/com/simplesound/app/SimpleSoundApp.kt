@@ -3,6 +3,7 @@ package com.simplesound.app
 import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.SettingsStore
 
 /**
@@ -19,6 +20,10 @@ class SimpleSoundApp : Application(), ImageLoaderFactory {
         super.onCreate()
         instance = this
         settingsStore = SettingsStore(this)
+        // Restore user playlists + favorite track ids from disk before any screen
+        // reads them. Tracks are scanned later (see MainActivity) once permission is
+        // granted, so we deliberately don't scan here.
+        MusicRepository.load(this)
     }
 
     /**

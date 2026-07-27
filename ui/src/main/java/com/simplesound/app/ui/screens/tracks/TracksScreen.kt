@@ -72,8 +72,8 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
             SortHeader(
                 current = sort,
                 onSort = { sort = it },
-                onShuffle = { player.playQueue(sorted.shuffled(), 0) },
-                onPlayAll = { player.playQueue(sorted, 0) }
+                onShuffle = { player.playQueue(sorted.shuffled(), 0, "All tracks") },
+                onPlayAll = { player.playQueue(sorted, 0, "All tracks") }
             )
             LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 160.dp)) {
                 items(sorted, key = { it.id }) { track ->
@@ -87,7 +87,7 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
                             if (selectionMode) {
                                 toggleSelected(track.id)
                             } else {
-                                player.playQueue(sorted, sorted.indexOf(track))
+                                player.playQueue(sorted, sorted.indexOf(track), "All tracks")
                                 onOpenNowPlaying()
                             }
                         },
@@ -102,8 +102,8 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
             selectedCount = selectedIds.size,
             onPlay = {
                 if (selectedTracks.isNotEmpty()) {
-                    // Temp queue only â€” not persisted as a playlist.
-                    player.playQueue(selectedTracks, 0)
+                    // Temp queue only Ã¢ not persisted as a playlist.
+                    player.playQueue(selectedTracks, 0, "Queue")
                     onOpenNowPlaying()
                     clearSelection()
                 }
@@ -120,7 +120,7 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
         TrackActionsSheet(
             track = t,
             isFavorite = t.id in favoriteIds,
-            onPlay = { player.playSingle(t) },
+            onPlay = { player.playSingle(t) }, // playSingle already labels as "Queue"
             onToggleFavorite = { vm.toggleFavoriteTrack(t.id) },
             onAddToPlaylist = { addTrack = t; sheetTrack = null },
             onDelete = { deleteTrack = t; sheetTrack = null },

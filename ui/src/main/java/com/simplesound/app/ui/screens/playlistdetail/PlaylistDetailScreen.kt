@@ -146,7 +146,7 @@ fun PlaylistDetailScreen(
                 TrackRow(
                     track = track,
                     onClick = {
-                        player.playQueue(tracks, tracks.indexOf(track))
+                        player.playQueue(tracks, tracks.indexOf(track), playlist.name)
                         onOpenNowPlaying()
                     },
                     onMore = {

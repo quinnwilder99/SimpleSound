@@ -1,6 +1,7 @@
 package com.simplesound.app.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.simplesound.app.data.model.Playlist
 import com.simplesound.app.data.model.PlaylistKind
 import com.simplesound.app.data.model.SortOption
@@ -11,18 +12,28 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 
 /**
- * Single in-memory source of truth for the music library and playlists.
+ * Single source of truth for the music library and playlists.
  *
- * v0.1 keeps everything in memory (seeded from [SampleData], overlaid with real
- * device audio from [MediaStoreScanner] when permission is granted). Swapping this
- * for a Room-backed implementation later requires no UI changes — screens depend on
- * the flows below, not on storage.
+ * Tracks are scanned from the device MediaStore on app start (see [loadDeviceLibrary]),
+ * so they are not persisted here. User-created playlists and the set of favorite
+ * single tracks, however, are persisted to a small SharedPreferences blob so that they
+ * survive app restarts. v0.1 keeps the runtime data in memory flows (so UI is reactive)
+ * with the disk layer acting purely as a save/restore snapshot on [load] and on every
+ * mutation.
  */
 object MusicRepository {
+
+    private const val PREFS_NAME = "simplesound_playlists"
+    private const val KEY_PLAYLISTS = "user_playlists"
+    private const val KEY_FAVORITE_TRACKS = "favorite_track_ids"
+    private const val KEY_INITIALIZED = "initialized"
+
+    private lateinit var prefs: SharedPreferences
 
     private val _tracks = MutableStateFlow(SampleData.tracks)
     val tracks: StateFlow<List<Track>> = _tracks.asStateFlow()
 
+    // Initial values are the sample seed; [load] overrides them from disk when present.
     private val _userPlaylists = MutableStateFlow(SampleData.userPlaylists())
     val userPlaylists: StateFlow<List<Playlist>> = _userPlaylists.asStateFlow()
 
@@ -30,6 +41,52 @@ object MusicRepository {
     val favoriteTrackIds: StateFlow<Set<Long>> = _favoriteTrackIds.asStateFlow()
 
     private val NATIVE_LIMIT = 100
+
+    // ---------- Init / persistence ----------
+
+    /**
+     * Call once from [com.simplesound.app.SimpleSoundApp.onCreate] before any screen
+     * touches the repository. Restores user playlists + favorite track ids from disk.
+     * On the very first launch (no saved state) the sample seed is persisted so that
+     * subsequent launches match the first-run state.
+     */
+    @Synchronized
+    fun load(context: Context) {
+        if (this::prefs.isInitialized) return
+        prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        if (prefs.getBoolean(KEY_INITIALIZED, false)) {
+            val saved = decodePlaylists(prefs.getString(KEY_PLAYLISTS, null))
+            if (saved != null) _userPlaylists.value = saved
+
+            val savedFav = decodeFavoriteTrackIds(prefs.getString(KEY_FAVORITE_TRACKS, null))
+            if (savedFav != null) _favoriteTrackIds.value = savedFav
+        } else {
+            // First run: persist the seed so nothing "disappears" on the next launch.
+            persistUserPlaylists()
+            persistFavoriteTrackIds()
+            prefs.edit().putBoolean(KEY_INITIALIZED, true).apply()
+        }
+    }
+
+    /** App is starting up — restore library + playlists from disk/scan. */
+    fun load(context: Context, scan: Boolean = true) {
+        load(context)
+        if (scan) {
+            val scanned = runCatching { MediaStoreScanner.scan(context) }.getOrDefault(emptyList())
+            if (scanned.isNotEmpty()) _tracks.value = scanned
+        }
+    }
+
+    private fun persistUserPlaylists() {
+        if (!this::prefs.isInitialized) return
+        prefs.edit().putString(KEY_PLAYLISTS, encodePlaylists(_userPlaylists.value)).apply()
+    }
+
+    private fun persistFavoriteTrackIds() {
+        if (!this::prefs.isInitialized) return
+        prefs.edit().putString(KEY_FAVORITE_TRACKS, encodeFavoriteTrackIds(_favoriteTrackIds.value)).apply()
+    }
 
     // ---------- Library loading ----------
 
@@ -54,11 +111,6 @@ object MusicRepository {
         }
     )
 
-    /**
-     * Filter the library by a free-text [query]. Matches are case-insensitive and
-     * evaluated against the track's title, artist, and album. Blank queries return
-     * every track so the search screen can show the full library before typing.
-     */
     fun searchTracks(query: String): List<Track> {
         val q = query.trim()
         if (q.isEmpty()) return _tracks.value
@@ -78,6 +130,7 @@ object MusicRepository {
         _favoriteTrackIds.value = _favoriteTrackIds.value.toMutableSet().apply {
             if (!add(trackId)) remove(trackId)
         }
+        persistFavoriteTrackIds()
         recomputeFavorites()
     }
 
@@ -109,11 +162,6 @@ object MusicRepository {
 
     // ---------- Favorites tab contents ----------
 
-    /**
-     * The playlists shown on the Favorites tab: the Favorite tracks playlist first
-     * (always present), followed by every user playlist the user hearted. Recomputed
-     * whenever favorites or playlists change.
-     */
     private val _favoritesTab = MutableStateFlow(computeFavoritesTab())
     val favoritesTabPlaylists: StateFlow<List<Playlist>> = _favoritesTab.asStateFlow()
 
@@ -122,8 +170,6 @@ object MusicRepository {
     }
 
     private fun computeFavoritesTab(): List<Playlist> {
-        // "Favorite tracks" always sits at position 1. The remaining hearted playlists
-        // behave like a stack: the most recently hearted rises to the top.
         val hearted = _userPlaylists.value
             .filter { it.favorited }
             .sortedByDescending { it.favoritedAt }
@@ -135,6 +181,7 @@ object MusicRepository {
     fun createPlaylist(name: String, trackIds: List<Long> = emptyList()): String {
         val id = "user-" + UUID.randomUUID().toString()
         _userPlaylists.value = _userPlaylists.value + Playlist(id, name.ifBlank { "New playlist" }, trackIds)
+        persistUserPlaylists()
         return id
     }
 
@@ -163,6 +210,7 @@ object MusicRepository {
 
     fun deletePlaylist(id: String) {
         _userPlaylists.value = _userPlaylists.value.filterNot { it.id == id }
+        persistUserPlaylists()
         recomputeFavorites()
     }
 
@@ -170,9 +218,11 @@ object MusicRepository {
     fun deleteTrack(trackId: Long) {
         _tracks.value = _tracks.value.filterNot { it.id == trackId }
         _favoriteTrackIds.value = _favoriteTrackIds.value.filterNot { it == trackId }.toSet()
+        persistFavoriteTrackIds()
         _userPlaylists.value = _userPlaylists.value.map { pl ->
             pl.copy(trackIds = pl.trackIds.filterNot { it == trackId })
         }
+        persistUserPlaylists()
         recomputeFavorites()
     }
 
@@ -182,9 +232,11 @@ object MusicRepository {
         val ids = trackIds.toSet()
         _tracks.value = _tracks.value.filterNot { it.id in ids }
         _favoriteTrackIds.value = _favoriteTrackIds.value.filterNot { it in ids }.toSet()
+        persistFavoriteTrackIds()
         _userPlaylists.value = _userPlaylists.value.map { pl ->
             pl.copy(trackIds = pl.trackIds.filterNot { it in ids })
         }
+        persistUserPlaylists()
         recomputeFavorites()
     }
 
@@ -192,6 +244,7 @@ object MusicRepository {
     fun reorderPlaylists(orderedIds: List<String>) {
         val byId = _userPlaylists.value.associateBy { it.id }
         _userPlaylists.value = orderedIds.mapNotNull { byId[it] }
+        persistUserPlaylists()
     }
 
     fun playlistById(id: String): Playlist? =
@@ -201,6 +254,65 @@ object MusicRepository {
 
     private inline fun update(id: String, transform: (Playlist) -> Playlist) {
         _userPlaylists.value = _userPlaylists.value.map { if (it.id == id) transform(it) else it }
+        persistUserPlaylists()
         recomputeFavorites()
     }
+
+    // ---------- Persistence encoding ----------
+    //
+    // Compact, dependency-free string format. Record separator = '\u0001',
+    // field separator = '\u0002'. Playlist names/cover uris are unlikely to
+    // contain these control chars; if they do, the chars are stripped on encode.
+    // Fields per playlist: id, kind.name, name, coverUri|null, favorited(0|1),
+    // favoritedAt, then the comma-joined track ids.
+
+    private fun encodePlaylists(playlists: List<Playlist>): String =
+        playlists.joinToString("\u0001") { pl ->
+            val fields = listOf(
+                pl.id,
+                pl.kind.name,
+                sanitize(pl.name),
+                pl.coverUri ?: "",
+                if (pl.favorited) "1" else "0",
+                pl.favoritedAt.toString(),
+                pl.trackIds.joinToString(",")
+            )
+            fields.joinToString("\u0002")
+        }
+
+    private fun decodePlaylists(raw: String?): List<Playlist>? {
+        if (raw.isNullOrEmpty()) return null
+        return raw.split("\u0001").mapNotNull { record ->
+            val f = record.split("\u0002")
+            if (f.size < 7) return@mapNotNull null
+            val id = f[0]
+            val kind = runCatching { PlaylistKind.valueOf(f[1]) }.getOrDefault(PlaylistKind.USER)
+            val name = f[2]
+            val cover = f[3].takeIf { it.isNotEmpty() }
+            val favorited = f[4] == "1"
+            val favoritedAt = f[5].toLongOrNull() ?: 0L
+            val trackIds = f[6].split(",").mapNotNull { it.toLongOrNull() }
+            Playlist(
+                id = id,
+                name = name,
+                trackIds = trackIds,
+                coverUri = cover,
+                kind = kind,
+                favorited = favorited,
+                favoritedAt = favoritedAt
+            )
+        }
+    }
+
+    private fun encodeFavoriteTrackIds(ids: Set<Long>): String =
+        ids.joinToString(",")
+
+    private fun decodeFavoriteTrackIds(raw: String?): Set<Long>? {
+        if (raw == null) return null
+        if (raw.isEmpty()) return emptySet()
+        return raw.split(",").mapNotNull { it.toLongOrNull() }.toSet()
+    }
+
+    private fun sanitize(s: String): String =
+        s.replace("\u0001", "").replace("\u0002", "")
 }

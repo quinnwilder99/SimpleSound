@@ -127,7 +127,7 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
                         TrackRow(
                             track = track,
                             onClick = {
-                                player.playQueue(results, results.indexOf(track))
+                                player.playQueue(results, results.indexOf(track), "Search results")
                                 onOpenNowPlaying()
                             },
                             onMore = { sheetTrack = track }
