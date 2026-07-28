@@ -1,4 +1,4 @@
-package com.simplesound.app.data
+﻿package com.simplesound.app.data
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -67,6 +67,12 @@ object MusicRepository {
             persistFavoriteTrackIds()
             prefs.edit().putBoolean(KEY_INITIALIZED, true).apply()
         }
+        // We just restored _userPlaylists / _favoriteTrackIds from disk (or seeded
+        // them). The favorites tab flow was initialised eagerly with the sample seed
+        // before this method ran, so recompute it now — otherwise the Favorites tab
+        // would show stale seed data (wrong hearted playlists / wrong order) until the
+        // next mutation, e.g. after a full app restart.
+        recomputeFavorites()
     }
 
     /** App is starting up — restore library + playlists from disk/scan. */
@@ -74,7 +80,10 @@ object MusicRepository {
         load(context)
         if (scan) {
             val scanned = runCatching { MediaStoreScanner.scan(context) }.getOrDefault(emptyList())
-            if (scanned.isNotEmpty()) _tracks.value = scanned
+            if (scanned.isNotEmpty()) {
+                _tracks.value = scanned
+                recomputeFavorites()
+            }
         }
     }
 
@@ -93,7 +102,12 @@ object MusicRepository {
     /** Replace sample tracks with real device audio, if any were found. */
     fun loadDeviceLibrary(context: Context) {
         val scanned = runCatching { MediaStoreScanner.scan(context) }.getOrDefault(emptyList())
-        if (scanned.isNotEmpty()) _tracks.value = scanned
+        if (scanned.isNotEmpty()) {
+            _tracks.value = scanned
+            // The "Favorite tracks" native playlist is derived from the track set,
+            // so a media-scan change must refresh the favorites tab too.
+            recomputeFavorites()
+        }
     }
 
     fun trackById(id: Long): Track? = _tracks.value.firstOrNull { it.id == id }

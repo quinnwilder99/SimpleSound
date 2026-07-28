@@ -115,7 +115,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1) ACTION BAR
+            // 1 ACTION BAR
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -156,7 +156,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                 }
             } else {
                 Spacer(Modifier.weight(0.6f))
-                // 2) ALBUM ART + METADATA
+                // 2 ALBUM ART + METADATA
                 // Pass the track's MediaStore URI as embeddedSource so Artwork
                 // decodes the per-track embedded picture (ID3 APIC) first, just
                 // like TrackRow does; track.albumArtUri is the album-level fallback.
@@ -189,7 +189,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                 }
                 Spacer(Modifier.height(20.dp))
 
-                // 3) MID-TIER UTILITY ROW
+                // 3 MID-TIER UTILITY ROW
                 val isFavorite = current.id in favoriteIds
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -200,8 +200,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                         Icon(
                             Icons.Rounded.QueueMusic,
                             contentDescription = "Queue",
-                            tint = if (queue.isNotEmpty()) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(26.dp)
                         )
                     }
@@ -225,7 +224,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // 4) PROGRESS BAR + TIMELINE
+                // 4 PROGRESS BAR + TIMELINE
                 val duration = durationMs.coerceAtLeast(0L)
                 val pos = seekingValue?.let { (it * duration).toLong() }
                     ?: positionMs.coerceIn(0L, duration)
@@ -264,7 +263,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
 
                 Spacer(Modifier.height(8.dp))
 
-                // 5) PLAYBACK CONTROLS
+                // 5 PLAYBACK CONTROLS
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
