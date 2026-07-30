@@ -135,6 +135,16 @@ object MusicRepository {
         }
     )
 
+    /** Sort an arbitrary list of tracks (e.g. a playlist's contents) by [option]. */
+    fun sortTracks(tracks: List<Track>, option: SortOption): List<Track> = tracks.sortedWith(
+        when (option) {
+            SortOption.DATE_ADDED -> compareByDescending { it.dateAddedSec }
+            SortOption.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            SortOption.ARTIST -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.artistOrUnknown }
+            SortOption.LENGTH -> compareBy { it.durationMs }
+        }
+    )
+
     fun searchTracks(query: String): List<Track> {
         val q = query.trim()
         if (q.isEmpty()) return _tracks.value

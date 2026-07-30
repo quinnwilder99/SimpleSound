@@ -45,9 +45,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.data.model.PlaylistKind
+import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.Artwork
+import com.simplesound.app.ui.components.SortHeader
 import com.simplesound.app.ui.components.TrackRow
 import com.simplesound.app.util.trackCountLabel
 
@@ -68,7 +70,9 @@ fun PlaylistDetailScreen(
     val playlist = remember(userPlaylists, playlistId) { vm.playlistById(playlistId) }
 
     if (playlist == null) { onBack(); return }
-    val tracks = vm.tracksByIds(playlist.trackIds)
+    val playlistTracks = vm.tracksByIds(playlist.trackIds)
+    var sort by remember { mutableStateOf(SortOption.DATE_ADDED) }
+    val tracks = remember(playlistTracks, sort) { vm.sortTracks(playlistTracks, sort) }
     val editable = playlist.kind == PlaylistKind.USER
 
     var menuOpen by remember { mutableStateOf(false) }
@@ -141,6 +145,14 @@ fun PlaylistDetailScreen(
                     Text(trackCountLabel(playlist.trackCount), style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+            item {
+                SortHeader(
+                    current = sort,
+                    onSort = { sort = it },
+                    onShuffle = { if (tracks.isNotEmpty()) player.playQueue(tracks.shuffled(), 0, playlist.name) },
+                    onPlayAll = { if (tracks.isNotEmpty()) player.playQueue(tracks, 0, playlist.name) }
+                )
             }
             items(tracks, key = { it.id }) { track ->
                 TrackRow(
