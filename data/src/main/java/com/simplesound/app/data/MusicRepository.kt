@@ -33,7 +33,9 @@ object MusicRepository {
     private val _tracks = MutableStateFlow(SampleData.tracks)
     val tracks: StateFlow<List<Track>> = _tracks.asStateFlow()
 
-    // Initial values are the sample seed; [load] overrides them from disk when present.
+    // On first launch there are NO user playlists — only the four native (computed)
+    // playlists shipped via [nativePlaylists]. [load] overrides this from disk when
+    // the user has previously created playlists.
     private val _userPlaylists = MutableStateFlow(SampleData.userPlaylists())
     val userPlaylists: StateFlow<List<Playlist>> = _userPlaylists.asStateFlow()
 
@@ -57,7 +59,15 @@ object MusicRepository {
 
         if (prefs.getBoolean(KEY_INITIALIZED, false)) {
             val saved = decodePlaylists(prefs.getString(KEY_PLAYLISTS, null))
-            if (saved != null) _userPlaylists.value = saved
+            if (saved != null) {
+                // Drop legacy sample-seed playlists (e.g. "GOAT", "Classical",
+                // "RockMetal", "Hollow Knight OST") that earlier builds persisted on
+                // first run. They are not real user playlists, so we remove them once
+                // and re-persist the cleaned list.
+                val cleaned = saved.filterNot { it.id.startsWith("seed-") }
+                _userPlaylists.value = cleaned
+                if (cleaned.size != saved.size) persistUserPlaylists()
+            }
 
             val savedFav = decodeFavoriteTrackIds(prefs.getString(KEY_FAVORITE_TRACKS, null))
             if (savedFav != null) _favoriteTrackIds.value = savedFav
@@ -223,6 +233,10 @@ object MusicRepository {
     }
 
     fun deletePlaylist(id: String) {
+        // Native (default) playlists are computed and always present; they can never
+        // be deleted. They are not stored in _userPlaylists, so this guard is a no-op
+        // in normal flow but makes the contract explicit.
+        if (id.startsWith("native-")) return
         _userPlaylists.value = _userPlaylists.value.filterNot { it.id == id }
         persistUserPlaylists()
         recomputeFavorites()

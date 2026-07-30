@@ -53,26 +53,14 @@ object SampleData {
         }
     }
 
-    fun userPlaylists(): List<Playlist> = listOf(
-        Playlist(
-            id = "seed-goat", name = "GOAT",
-            trackIds = tracks.map { it.id }.take(12), kind = PlaylistKind.USER, favorited = true
-        ),
-        Playlist(
-            id = "seed-classical", name = "Classical",
-            trackIds = tracks.filter { it.album in listOf("Nocturnes", "Suite Bergamasque") }.map { it.id },
-            kind = PlaylistKind.USER, favorited = true
-        ),
-        Playlist(
-            id = "seed-rockmetal", name = "RockMetal",
-            trackIds = tracks.map { it.id }.takeLast(6), kind = PlaylistKind.USER
-        ),
-        Playlist(
-            id = "seed-hollow", name = "Hollow Knight OST",
-            trackIds = tracks.filter { it.album == "Hollow Knight OST" }.map { it.id },
-            kind = PlaylistKind.USER
-        ),
-    )
+    /**
+     * On first launch the app should ship with NO user-created playlists — only the
+     * four native (computed) playlists: Recently added, Most played, Recently played
+     * and Favorite tracks. Those live in [com.simplesound.app.data.MusicRepository.nativePlaylists]
+     * and cannot be deleted. Return an empty list here so the seed matches the
+     * intended first-run state.
+     */
+    fun userPlaylists(): List<Playlist> = emptyList()
 
     /** Track ids hearted by default so the Favorites tab is not empty on first run. */
     val favoriteTrackIds: Set<Long> = setOf(1L, 7L, 9L, 15L)

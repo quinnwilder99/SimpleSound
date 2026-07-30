@@ -38,6 +38,9 @@ import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
+import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
+import com.simplesound.app.ui.components.DeleteTracksDialog
+import com.simplesound.app.ui.components.SelectionActionBar
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
@@ -46,7 +49,9 @@ import java.io.File
 /**
  * Search / look-up screen. Lets the user find any track in the library by title,
  * artist, or album. Results update live as the query changes, and tapping a row
- * plays the full result list starting from that track.
+ * plays the full result list starting from that track. Long-press a row to enter
+ * multi-selection mode (mirrors TracksScreen): play, add to playlist, delete, or
+ * clear the selection via the bottom action bar.
  */
 @Composable
 fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> Unit = {}) {
@@ -62,6 +67,22 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
     var sheetTrack by remember { mutableStateOf<Track?>(null) }
     var addTrack by remember { mutableStateOf<Track?>(null) }
     var detailsTrack by remember { mutableStateOf<Track?>(null) }
+
+    // ---- Multi-selection state (mirrors TracksScreen) ----
+    var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
+    val selectionMode = selectedIds.isNotEmpty()
+    var showAddMany by remember { mutableStateOf(false) }
+    var showDeleteMany by remember { mutableStateOf(false) }
+
+    val selectedTracks: List<Track> = remember(selectedIds, results) {
+        val byId = results.associateBy { it.id }
+        selectedIds.mapNotNull { byId[it] }
+    }
+
+    fun toggleSelected(id: Long) {
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+    }
+    fun clearSelection() { selectedIds = emptySet() }
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -124,17 +145,41 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
             } else {
                 LazyColumn(contentPadding = PaddingValues(bottom = 160.dp)) {
                     items(results, key = { it.id }) { track ->
+                        val selected = track.id in selectedIds
                         TrackRow(
                             track = track,
+                            selectionMode = selectionMode,
+                            selected = selected,
+                            onLongClick = { toggleSelected(track.id) },
                             onClick = {
-                                player.playQueue(results, results.indexOf(track), "Search results")
-                                onOpenNowPlaying()
+                                if (selectionMode) {
+                                    toggleSelected(track.id)
+                                } else {
+                                    player.playQueue(results, results.indexOf(track), "Search results")
+                                    onOpenNowPlaying()
+                                }
                             },
                             onMore = { sheetTrack = track }
                         )
                     }
                 }
             }
+
+            // Bottom action bar for multi-selection (mirrors TracksScreen).
+            SelectionActionBar(
+                selectedCount = selectedIds.size,
+                onPlay = {
+                    if (selectedTracks.isNotEmpty()) {
+                        player.playQueue(selectedTracks, 0, "Search results")
+                        onOpenNowPlaying()
+                        clearSelection()
+                    }
+                },
+                onAdd = { showAddMany = true },
+                onDelete = { showDeleteMany = true },
+                onClear = { clearSelection() },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
     }
 
@@ -163,6 +208,37 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
 
     detailsTrack?.let { t ->
         TrackDetailsDialog(track = t, onDismiss = { detailsTrack = null })
+    }
+
+    // ---- Multi-track dialogs (mirrors TracksScreen) ----
+    if (showAddMany && selectedIds.isNotEmpty()) {
+        AddTracksToPlaylistDialog(
+            playlists = userPlaylists,
+            pickedCount = selectedIds.size,
+            onAddToExisting = { pl ->
+                vm.addTracksToPlaylist(pl.id, selectedIds.toList())
+                clearSelection()
+                showAddMany = false
+            },
+            onCreateNew = { name ->
+                vm.createPlaylist(name, selectedIds.toList())
+                clearSelection()
+                showAddMany = false
+            },
+            onDismiss = { showAddMany = false }
+        )
+    }
+
+    if (showDeleteMany && selectedIds.isNotEmpty()) {
+        DeleteTracksDialog(
+            count = selectedIds.size,
+            onConfirm = {
+                vm.deleteTracks(selectedIds.toList())
+                clearSelection()
+                showDeleteMany = false
+            },
+            onDismiss = { showDeleteMany = false }
+        )
     }
 }
 
