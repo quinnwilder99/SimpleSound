@@ -62,6 +62,10 @@ object SampleData {
      */
     fun userPlaylists(): List<Playlist> = emptyList()
 
-    /** Track ids hearted by default so the Favorites tab is not empty on first run. */
-    val favoriteTrackIds: Set<Long> = setOf(1L, 7L, 9L, 15L)
+    /**
+     * No tracks are favorited by default. The "Favorite tracks" native (default)
+     * playlist should show 0 tracks on first run — the user adds to it by hearting
+     * tracks themselves.
+     */
+    val favoriteTrackIds: Set<Long> = emptySet()
 }
