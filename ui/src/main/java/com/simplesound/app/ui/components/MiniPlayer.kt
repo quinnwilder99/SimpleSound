@@ -2,11 +2,11 @@ package com.simplesound.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,16 +35,26 @@ import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.theme.SoundColors
 
 /**
- * Persistent now-playing bar pinned above the tab bar, matching the maroon pill in
- * the reference screenshots. Hidden entirely when nothing has been played yet.
+ * Persistent now-playing bar pinned above the tab bar, matching the maroon pill
+ * in the reference screenshots. Always visible once a track has been played at
+ * least once; it keeps showing the last played track title even when playback is
+ * stopped. Shows only the track title plus three transport controls: reverse
+ * (previous), play/stop (toggle), and skip (next).
+ *
+ * The middle button serves as both play and stop: when playing it pauses, when
+ * paused it resumes. Tapping anywhere else on the bar opens the full Now Playing
+ * screen for that track.
  */
 @Composable
 fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     val player = LocalPlayer.current
     val track by player.currentTrack.collectAsStateWithLifecycle()
+    val lastPlayed by player.lastPlayedTrack.collectAsStateWithLifecycle()
     val isPlaying by player.isPlaying.collectAsStateWithLifecycle()
 
-    val current = track ?: return
+    // Prefer the currently playing track, fall back to the last played track so
+    // the bar stays visible after stop() clears the current track.
+    val display = track ?: lastPlayed ?: return
 
     Row(
         modifier = modifier
@@ -71,24 +81,15 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
             )
         }
         Spacer(Modifier.width(12.dp))
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = current.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = "-  ${current.artistOrUnknown}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.7f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Text(
+            text = display.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        // Transport controls: reverse (previous), play/stop (toggle), skip (next).
         IconButton(onClick = { player.previous() }) {
             Icon(Icons.Rounded.SkipPrevious, "Previous", tint = Color.White)
         }
@@ -103,5 +104,4 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
             Icon(Icons.Rounded.SkipNext, "Next", tint = Color.White)
         }
     }
-    Spacer(Modifier.height(2.dp))
 }

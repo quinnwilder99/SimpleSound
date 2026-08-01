@@ -43,6 +43,23 @@ class PlayerController(private val context: Context) {
     private val _currentTrack = MutableStateFlow<Track?>(null)
     val currentTrack: StateFlow<Track?> = _currentTrack.asStateFlow()
 
+    /**
+     * The most recently played track. Persists across pause/stop so the mini player
+     * can keep showing the last played title even when [currentTrack] is cleared.
+     */
+    private val _lastPlayedTrack = MutableStateFlow<Track?>(null)
+    val lastPlayedTrack: StateFlow<Track?> = _lastPlayedTrack.asStateFlow()
+
+    /**
+     * Restore the last played track from persistence (e.g. after app restart).
+     * Only seeds the value if no track is currently set, so it never clobbers a
+     * live session.
+     */
+    fun restoreLastPlayedTrack(track: Track?) {
+        if (track == null) return
+        if (_lastPlayedTrack.value == null) _lastPlayedTrack.value = track
+    }
+
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
@@ -81,7 +98,10 @@ class PlayerController(private val context: Context) {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val id = mediaItem?.mediaId
-            if (id != null) _currentTrack.value = trackIndex[id]
+            if (id != null) {
+                _currentTrack.value = trackIndex[id]
+                _lastPlayedTrack.value = trackIndex[id]
+            }
             // Keep the queue index in sync with the player's current window index.
             _queueIndex.value = controller?.currentMediaItemIndex ?: -1
             _positionMs.value = 0L
@@ -112,7 +132,12 @@ class PlayerController(private val context: Context) {
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener({
-            controller = future.get().also { it.addListener(listener) }
+            // The service may fail to bind (e.g. process death, permission
+            // revocation). Guard `future.get()` so a connection failure cannot
+            // crash the whole app; we simply leave controller == null and the
+            // UI degrades to a non-playing state safely.
+            val c = runCatching { future.get() }.getOrNull() ?: return@addListener
+            controller = c.also { it.addListener(listener) }
             // Sync initial state
             _isShuffleOn.value = controller?.shuffleModeEnabled == true
             _repeatMode.value = when (controller?.repeatMode) {
@@ -168,6 +193,7 @@ class PlayerController(private val context: Context) {
         _queueTitle.value = sourceTitle
         _queueIndex.value = safeIndex
         _currentTrack.value = tracks[safeIndex]
+        _lastPlayedTrack.value = tracks[safeIndex]
     }
 
     fun playSingle(track: Track) = playQueue(listOf(track), 0, "Queue")
@@ -179,6 +205,18 @@ class PlayerController(private val context: Context) {
 
     fun next() { controller?.seekToNextMediaItem() }
     fun previous() { controller?.seekToPreviousMediaItem() }
+
+    /**
+     * Stop playback entirely. The mini player keeps showing the last played track
+     * title (via [lastPlayedTrack]), but the current track state is cleared so
+     * the play/pause button reflects a stopped state.
+     */
+    fun stop() {
+        val c = controller ?: return
+        _currentTrack.value = null
+        _queueIndex.value = -1
+        c.stop()
+    }
 
     /**
      * Jump to the queue item at [index] without rebuilding the queue. The temp

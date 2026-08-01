@@ -1,4 +1,4 @@
-package com.simplesound.app.ui
+﻿package com.simplesound.app.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -37,7 +37,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.simplesound.app.data.model.Tab
 import com.simplesound.app.ui.components.GlowBackground
-import com.simplesound.app.ui.components.MiniPlayer
 import com.simplesound.app.ui.navigation.Routes
 import com.simplesound.app.ui.screens.albums.AlbumsScreen
 import com.simplesound.app.ui.screens.artists.ArtistsScreen
@@ -52,26 +51,17 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
     val tabSettings by vm.tabSettings.collectAsStateWithLifecycle()
     val enabledTabs = remember(tabSettings) { tabSettings.filter { it.enabled }.map { it.tab } }
 
-    // Tabs can be enabled/disabled in Manage Tabs. Re-create the pager whenever the
-    // set of enabled tabs changes so page indices always line up with `enabledTabs`.
     val pagerState = rememberPagerState(pageCount = { enabledTabs.size })
     val scope = rememberCoroutineScope()
 
-    // Default selection: Tracks if it's enabled, otherwise the first enabled tab,
-    // otherwise (degenerate) Tracks so the UI always has something to show.
     val firstTabIndex = remember(enabledTabs) {
         enabledTabs.indexOfFirst { it == Tab.TRACKS }.takeIf { it >= 0 } ?: 0
     }
 
-    // Resolve the currently selected tab from the pager's page, falling back to a
-    // sane default when the tab set changes underneath us.
     val selectedTab = enabledTabs.getOrNull(pagerState.currentPage)
         ?: enabledTabs.getOrNull(firstTabIndex)
         ?: Tab.TRACKS
 
-    // When the set of enabled tabs changes (e.g. entering via a fresh launch or
-    // returning from Manage Tabs), snap the pager to the default page so it never
-    // points at an out-of-range index.
     LaunchedEffect(enabledTabs) {
         if (pagerState.currentPage !in enabledTabs.indices && enabledTabs.isNotEmpty()) {
             pagerState.scrollToPage(firstTabIndex)
@@ -81,13 +71,7 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
     Box(Modifier.fillMaxSize()) {
         GlowBackground(accent = MaterialTheme.colorScheme.primary)
         Scaffold(
-            containerColor = Color.Transparent,
-            bottomBar = {
-                MiniPlayer(
-                    Modifier.padding(bottom = 6.dp),
-                    onClick = { navController.navigate(Routes.NOW_PLAYING) }
-                )
-            }
+            containerColor = Color.Transparent
         ) { inner ->
             Column(Modifier.padding(inner).fillMaxSize()) {
                 Row(
@@ -124,9 +108,6 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
                             modifier = Modifier
                                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
                                 .clickable {
-                                    // Tapping a tab animates the pager to that page; the pager's
-                                    // currentPage change drives `selectedTab` via the composable
-                                    // recompute above, so we don't need to set selection here.
                                     scope.launch { pagerState.animateScrollToPage(index) }
                                 }
                                 .padding(vertical = 4.dp, horizontal = 2.dp)
@@ -134,8 +115,6 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
                     }
                 }
 
-                // Swipe between enabled tabs. Each page is its own screen so vertical
-                // scrolling inside a tab (e.g. long track lists) keeps working.
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize()

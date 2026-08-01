@@ -84,6 +84,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
     val player = LocalPlayer.current
     val context = LocalContext.current
     val track by player.currentTrack.collectAsStateWithLifecycle()
+    val lastPlayedTrack by player.lastPlayedTrack.collectAsStateWithLifecycle()
     val isPlaying by player.isPlaying.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
     val userPlaylists by vm.userPlaylists.collectAsStateWithLifecycle()
@@ -145,7 +146,10 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                 }
             }
 
-            val current = track
+            // Prefer the currently playing track; fall back to the last played track
+            // so the screen still shows something useful (and stays in sync with the
+            // persistent mini player) when playback is stopped but a track exists.
+            val current = track ?: lastPlayedTrack
             if (current == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
@@ -326,7 +330,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
     }
 
     // ---- Dialogs / sheets ----
-    val current = track
+    val current = track ?: lastPlayedTrack
     if (showAddDialog && current != null) {
         AddToPlaylistDialog(
             playlists = userPlaylists,

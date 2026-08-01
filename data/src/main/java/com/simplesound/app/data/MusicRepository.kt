@@ -27,6 +27,11 @@ object MusicRepository {
     private const val KEY_PLAYLISTS = "user_playlists"
     private const val KEY_FAVORITE_TRACKS = "favorite_track_ids"
     private const val KEY_INITIALIZED = "initialized"
+    private const val KEY_LAST_PLAYED_TRACK_ID = "last_played_track_id"
+    private const val KEY_LAST_PLAYED_TITLE = "last_played_title"
+    private const val KEY_LAST_PLAYED_ARTIST = "last_played_artist"
+    private const val KEY_LAST_PLAYED_URI = "last_played_uri"
+    private const val KEY_LAST_PLAYED_ALBUM_ART = "last_played_album_art"
 
     private lateinit var prefs: SharedPreferences
 
@@ -105,6 +110,61 @@ object MusicRepository {
     private fun persistFavoriteTrackIds() {
         if (!this::prefs.isInitialized) return
         prefs.edit().putString(KEY_FAVORITE_TRACKS, encodeFavoriteTrackIds(_favoriteTrackIds.value)).apply()
+    }
+
+    // ---------- Last played track (persistence) ----------
+    //
+    // The mini player survives app restarts by remembering the most recently
+    // played track. We persist a *full snapshot* (id, title, artist, uri,
+    // albumArtUri) — not just the id — so the bar can reappear immediately on
+    // launch even before the MediaStore scan finishes loading the real library.
+    // The id is stored separately so the caller can refresh the snapshot from
+    // the live library once it is available.
+
+    /** Persist a snapshot of the most recently played track (or clear with null). */
+    fun saveLastPlayedTrack(track: com.simplesound.app.data.model.Track?) {
+        if (!this::prefs.isInitialized) return
+        val e = prefs.edit()
+        if (track == null) {
+            e.remove(KEY_LAST_PLAYED_TRACK_ID)
+                .remove(KEY_LAST_PLAYED_TITLE)
+                .remove(KEY_LAST_PLAYED_ARTIST)
+                .remove(KEY_LAST_PLAYED_URI)
+                .remove(KEY_LAST_PLAYED_ALBUM_ART)
+                .apply()
+            return
+        }
+        e.putLong(KEY_LAST_PLAYED_TRACK_ID, track.id)
+            .putString(KEY_LAST_PLAYED_TITLE, track.title)
+            .putString(KEY_LAST_PLAYED_ARTIST, track.artist)
+            .putString(KEY_LAST_PLAYED_URI, track.uri)
+            .putString(KEY_LAST_PLAYED_ALBUM_ART, track.albumArtUri)
+            .apply()
+    }
+
+    /** The persisted id of the last played track, or -1 if none was ever saved. */
+    fun lastPlayedTrackId(): Long =
+        if (this::prefs.isInitialized) prefs.getLong(KEY_LAST_PLAYED_TRACK_ID, -1L) else -1L
+
+    /**
+     * The persisted last-played track snapshot, or null if none was saved.
+     * This is a lightweight reconstruction (id + title + artist + uri + art) so
+     * the mini player can render immediately on launch; callers may upgrade it
+     * to the full live [Track] via [trackById] once the library has loaded.
+     */
+    fun lastPlayedTrack(): com.simplesound.app.data.model.Track? {
+        if (!this::prefs.isInitialized) return null
+        val id = prefs.getLong(KEY_LAST_PLAYED_TRACK_ID, -1L)
+        if (id < 0L) return null
+        return com.simplesound.app.data.model.Track(
+            id = id,
+            title = prefs.getString(KEY_LAST_PLAYED_TITLE, null) ?: "",
+            artist = prefs.getString(KEY_LAST_PLAYED_ARTIST, null) ?: "",
+            album = "",
+            durationMs = 0L,
+            uri = prefs.getString(KEY_LAST_PLAYED_URI, null) ?: "",
+            albumArtUri = prefs.getString(KEY_LAST_PLAYED_ALBUM_ART, null)
+        )
     }
 
     // ---------- Library loading ----------
