@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,6 +87,24 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    // Drive the global mini-player hidden flag from this screen's selection/dialog
+    // state so the persistent mini player can't overlay and intercept touches over
+    // the bottom selection action bar or any modal sheet/dialog.
+    val anyOverlayOpen = selectionMode ||
+        sheetTrack != null ||
+        addTrack != null ||
+        detailsTrack != null ||
+        showAddMany ||
+        showDeleteMany
+    LaunchedEffect(anyOverlayOpen) {
+        vm.setMiniPlayerHidden(anyOverlayOpen)
+    }
+    // Always release the flag when leaving the screen so the mini player reappears
+    // on other routes.
+    DisposableEffect(Unit) {
+        onDispose { vm.setMiniPlayerHidden(false) }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,

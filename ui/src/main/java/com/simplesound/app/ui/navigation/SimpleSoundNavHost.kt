@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -53,6 +54,11 @@ fun SimpleSoundNavHost(
         // full-screen Now Playing route (which already shows full transport).
         val backStackEntry by navController.currentBackStackEntryAsState()
         val route = backStackEntry?.destination?.route
+
+        // A screen (e.g. Search in multi-selection mode) can request the global mini
+        // player be temporarily hidden so its own bottom-aligned overlays/modals
+        // aren't covered and blocked from touches.
+        val miniPlayerHidden by vm.miniPlayerHidden.collectAsStateWithLifecycle()
 
         NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
@@ -100,10 +106,13 @@ fun SimpleSoundNavHost(
         // Global, persistent mini player pinned to the bottom of every screen.
         // It appears across all navigation routes and shows the last played track.
         // It is simply *omitted* on the full-screen Now Playing route (which already
-        // shows its own transport controls). Using a plain conditional instead of an
-        // animated cross-fade avoids both layers composing/recomposing at once during
-        // the navigation transition, which was the source of the lag/jank.
-        if (route != Routes.NOW_PLAYING) {
+        // shows its own transport controls). It is also omitted while a screen has
+        // requested it be hidden (e.g. Search multi-selection overlays/dialogs) so it
+        // can't intercept touches on top of those overlays.
+        // Using a plain conditional instead of an animated cross-fade avoids both
+        // layers composing/recomposing at once during the navigation transition,
+        // which was the source of the lag/jank.
+        if (route != Routes.NOW_PLAYING && !miniPlayerHidden) {
             Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                 MiniPlayer(
                     modifier = Modifier.navigationBarsPadding(),

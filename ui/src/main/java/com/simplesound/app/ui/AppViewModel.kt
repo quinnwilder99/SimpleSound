@@ -12,7 +12,10 @@ import com.simplesound.app.data.model.TabSetting
 import com.simplesound.app.data.model.Track
 import com.simplesound.core.theme.AccentColor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -34,6 +37,20 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
     val userPlaylists = MusicRepository.userPlaylists
     val favoriteTrackIds = MusicRepository.favoriteTrackIds
     val favoritesTabPlaylists = MusicRepository.favoritesTabPlaylists
+
+    /**
+     * Temporarily hide the global persistent mini player. Set to `true` by screens
+     * that present their own bottom-aligned overlay UI (e.g. multi-selection action
+     * bars or modal dialogs) so the mini player can't intercept touches on top of
+     * them. Any screen that turns this on MUST turn it back off when its overlay
+     * disappears (and on exit) so the mini player is restored for the rest of the app.
+     */
+    private val _miniPlayerHidden = MutableStateFlow(false)
+    val miniPlayerHidden: StateFlow<Boolean> = _miniPlayerHidden.asStateFlow()
+
+    fun setMiniPlayerHidden(hidden: Boolean) {
+        _miniPlayerHidden.value = hidden
+    }
 
     fun loadDeviceLibrary(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
