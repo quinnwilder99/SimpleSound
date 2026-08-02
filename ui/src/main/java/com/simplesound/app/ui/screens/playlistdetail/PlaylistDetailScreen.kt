@@ -51,10 +51,13 @@ import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
+import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.Artwork
 import com.simplesound.app.ui.components.PlaylistSelectionActionBar
+import com.simplesound.app.ui.components.PlaylistTrackActionsSheet
 import com.simplesound.app.ui.components.RemoveTracksDialog
 import com.simplesound.app.ui.components.SortHeader
+import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
 import com.simplesound.app.util.trackCountLabel
 
@@ -87,6 +90,11 @@ fun PlaylistDetailScreen(
     val selectionMode = selectedIds.isNotEmpty()
     var showAddMany by remember { mutableStateOf(false) }
     var showRemoveMany by remember { mutableStateOf(false) }
+
+    // ---- Per-row "more" sheet (single track) ----
+    var sheetTrack by remember { mutableStateOf<Track?>(null) }
+    var addOneTrack by remember { mutableStateOf<Track?>(null) }
+    var detailsTrack by remember { mutableStateOf<Track?>(null) }
 
     val selectedTracks: List<Track> = remember(selectedIds, tracks) {
         val byId = tracks.associateBy { it.id }
@@ -203,14 +211,7 @@ fun PlaylistDetailScreen(
                                 onOpenNowPlaying()
                             }
                         },
-                        onMore = {
-                            // Per-row overflow in selection mode is hidden by TrackRow;
-                            // here we use it as a quick "remove this track" shortcut
-                            // for editable (user) playlists.
-                            if (editable) {
-                                vm.removeTracksFromPlaylist(playlistId, listOf(track.id))
-                            }
-                        }
+                        onMore = { sheetTrack = track }
                     )
                 }
             }
@@ -277,6 +278,36 @@ fun PlaylistDetailScreen(
             },
             onDismiss = { showRemoveMany = false }
         )
+    }
+
+    // ---- Single-track "more" sheet: Add / Remove / Track details ----
+    sheetTrack?.let { t ->
+        PlaylistTrackActionsSheet(
+            track = t,
+            onAddToPlaylist = { sheetTrack = null; addOneTrack = t },
+            onRemoveFromPlaylist = {
+                if (editable) vm.removeTracksFromPlaylist(playlistId, listOf(t.id))
+            },
+            onDetails = { sheetTrack = null; detailsTrack = t },
+            onDismiss = { sheetTrack = null }
+        )
+    }
+
+    // Add this single track to another (existing) playlist.
+    addOneTrack?.let { t ->
+        AddToPlaylistDialog(
+            playlists = userPlaylists.filter { it.id != playlistId },
+            onPick = { pl ->
+                vm.addTracksToPlaylist(pl.id, listOf(t.id))
+                addOneTrack = null
+            },
+            onDismiss = { addOneTrack = null }
+        )
+    }
+
+    // Track details dialog.
+    detailsTrack?.let { t ->
+        TrackDetailsDialog(track = t, onDismiss = { detailsTrack = null })
     }
 }
 

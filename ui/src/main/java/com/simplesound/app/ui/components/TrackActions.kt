@@ -18,6 +18,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,6 +67,44 @@ fun TrackActionsSheet(
             SheetItem(Icons.Rounded.Share, "Share") { onShare(); onDismiss() }
             SheetItem(Icons.Rounded.Info, "Track details") { onDetails() }
             SheetItem(Icons.Rounded.Delete, "Delete", destructive = true) { onDelete() }
+        }
+    }
+}
+
+/**
+ * Compact bottom sheet for a single track inside a user-created playlist.
+ *
+ * Shows only the three context-appropriate actions:
+ *  - **Add** — add this specific track to another playlist
+ *  - **Remove** — remove this specific track from the current playlist
+ *  - **Track details** — show detailed metadata
+ *
+ * Unlike the general [TrackActionsSheet], this intentionally has no
+ * Play / Favorite / Share / Delete actions, since those are either covered
+ * by row tap / the multi-select bar / library-wide concerns.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlaylistTrackActionsSheet(
+    track: Track,
+    onAddToPlaylist: () -> Unit,
+    onRemoveFromPlaylist: () -> Unit,
+    onDetails: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+            Text(
+                track.title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
+            SheetItem(Icons.Rounded.PlaylistAdd, "Add to playlist") { onAddToPlaylist() }
+            SheetItem(Icons.Rounded.RemoveCircleOutline, "Remove from playlist", destructive = true) {
+                onRemoveFromPlaylist(); onDismiss()
+            }
+            SheetItem(Icons.Rounded.Info, "Track details") { onDetails() }
         }
     }
 }
