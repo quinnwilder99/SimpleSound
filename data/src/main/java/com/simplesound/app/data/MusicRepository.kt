@@ -291,6 +291,12 @@ object MusicRepository {
         it.copy(trackIds = it.trackIds - trackId)
     }
 
+    /** Remove several tracks at once from a single playlist. */
+    fun removeTracksFromPlaylist(id: String, trackIds: List<Long>) = update(id) {
+        val ids = trackIds.toSet()
+        it.copy(trackIds = it.trackIds.filterNot { id -> id in ids })
+    }
+
     fun toggleFavoritePlaylist(id: String) {
         update(id) { pl ->
             val newFavorited = !pl.favorited

@@ -78,6 +78,7 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
     fun renamePlaylist(id: String, name: String) = MusicRepository.renamePlaylist(id, name)
     fun setPlaylistCover(id: String, uri: String?) = MusicRepository.setPlaylistCover(id, uri)
     fun addTracksToPlaylist(id: String, ids: List<Long>) = MusicRepository.addTracksToPlaylist(id, ids)
+    fun removeTracksFromPlaylist(id: String, ids: List<Long>) = MusicRepository.removeTracksFromPlaylist(id, ids)
     fun deletePlaylist(id: String) = MusicRepository.deletePlaylist(id)
     fun deleteTrack(trackId: Long) = MusicRepository.deleteTrack(trackId)
     fun deleteTracks(trackIds: List<Long>) = MusicRepository.deleteTracks(trackIds)

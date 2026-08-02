@@ -21,6 +21,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -79,8 +81,81 @@ fun SelectionActionBar(
     }
 }
 
+/**
+ * Selection action bar variant for playlists: Play / Add / Share / Remove.
+ *
+ * Actions are rendered as icon-only buttons (no text labels) to keep the bar
+ * compact. Share is intentionally surfaced but wired as a no-op placeholder
+ * (see [onShare]); the caller is responsible for any future implementation.
+ * "Remove" here removes the selected tracks *from the current playlist*
+ * (not from the library), as opposed to [SelectionActionBar]'s destructive
+ * "Delete".
+ */
 @Composable
-private fun BarAction(icon: ImageVector, label: String, onClick: () -> Unit, destructive: Boolean = false) {
+fun PlaylistSelectionActionBar(
+    selectedCount: Int,
+    onPlay: () -> Unit,
+    onAdd: () -> Unit,
+    onShare: () -> Unit,
+    onRemove: () -> Unit,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+    shareEnabled: Boolean = false
+) {
+    AnimatedVisibility(
+        visible = selectedCount > 0,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = modifier
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "$selectedCount",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onPlay) {
+                    Icon(Icons.Rounded.PlayArrow, "Play selected", tint = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onAdd) {
+                    Icon(Icons.Rounded.PlaylistAdd, "Add to playlist", tint = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onShare, enabled = shareEnabled) {
+                    Icon(
+                        Icons.Rounded.Share, "Share",
+                        tint = if (shareEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+                }
+                IconButton(onClick = onRemove) {
+                    Icon(Icons.Rounded.RemoveCircleOutline, "Remove from playlist", tint = MaterialTheme.colorScheme.error)
+                }
+                IconButton(onClick = onClear) {
+                    Icon(Icons.Rounded.Close, "Clear selection", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BarAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    destructive: Boolean = false,
+    enabled: Boolean = true
+) {
     Row(
         modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -146,5 +221,21 @@ fun DeleteTracksDialog(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit)
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         title = { Text("Delete tracks") },
         text = { Text("Permanently delete " + count + " track" + (if (count == 1) "" else "s") + " from your library? This cannot be undone.") }
+    )
+}
+
+/**
+ * Confirmation for removing selected tracks from a single playlist. Unlike
+ * [DeleteTracksDialog], this only removes them from the playlist — the tracks
+ * remain in the library.
+ */
+@Composable
+fun RemoveTracksDialog(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Remove", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Remove from playlist") },
+        text = { Text("Remove " + count + " track" + (if (count == 1) "" else "s") + " from this playlist? The tracks will stay in your library.") }
     )
 }
