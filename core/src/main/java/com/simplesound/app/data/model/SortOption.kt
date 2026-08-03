@@ -6,4 +6,10 @@ enum class SortOption(val label: String) {
     NAME("Name"),
     ARTIST("Artist"),
     LENGTH("Length");
+
+    companion object {
+        /** Resolves a stored sort name back to a [SortOption], defaulting to [DATE_ADDED]. */
+        fun fromName(name: String?): SortOption =
+            entries.firstOrNull { it.name == name } ?: DATE_ADDED
+    }
 }

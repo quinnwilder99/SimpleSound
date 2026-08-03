@@ -32,6 +32,10 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
     val tabSettings = settings.tabSettings
         .stateIn(viewModelScope, SharingStarted.Eagerly, Tab.Default.map { TabSetting(it, true) })
 
+    /** The user's last-chosen sort order on the Tracks tab (persisted). */
+    val tracksSort = settings.tracksSort
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SortOption.DATE_ADDED)
+
     // Repository-backed library flows (shared singletons).
     val tracks = MusicRepository.tracks
     val userPlaylists = MusicRepository.userPlaylists
@@ -65,6 +69,8 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
         val safe = list.map { if (it.tab.isMandatory) it.copy(enabled = true) else it }
         settings.setTabSettings(safe)
     }
+
+    fun setTracksSort(option: SortOption) = viewModelScope.launch { settings.setTracksSort(option) }
 
     // ---- Library / playlist passthroughs ----
     fun sortedTracks(option: SortOption) = MusicRepository.sortedTracks(option)

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Tab
 import com.simplesound.app.data.model.TabSetting
 import com.simplesound.core.theme.AccentColor
@@ -24,6 +25,7 @@ class SettingsStore(private val context: Context) {
     private object Keys {
         val ACCENT = stringPreferencesKey("accent")
         val TABS = stringPreferencesKey("tab_config")
+        val TRACKS_SORT = stringPreferencesKey("tracks_sort")
     }
 
     val accent: Flow<AccentColor> = context.dataStore.data.map { prefs ->
@@ -34,12 +36,21 @@ class SettingsStore(private val context: Context) {
         decodeTabs(prefs[Keys.TABS])
     }
 
+    /** The user's last-chosen sort order on the Tracks tab. */
+    val tracksSort: Flow<SortOption> = context.dataStore.data.map { prefs ->
+        SortOption.fromName(prefs[Keys.TRACKS_SORT])
+    }
+
     suspend fun setAccent(accent: AccentColor) {
         context.dataStore.edit { it[Keys.ACCENT] = accent.name }
     }
 
     suspend fun setTabSettings(settings: List<TabSetting>) {
         context.dataStore.edit { it[Keys.TABS] = encodeTabs(settings) }
+    }
+
+    suspend fun setTracksSort(option: SortOption) {
+        context.dataStore.edit { it[Keys.TRACKS_SORT] = option.name }
     }
 
     // ---- encoding: "FAVORITES:1,TRACKS:1,PLAYLISTS:0,..." ----

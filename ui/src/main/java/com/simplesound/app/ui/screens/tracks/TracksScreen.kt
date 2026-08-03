@@ -44,7 +44,7 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
     val favoriteIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
     val userPlaylists by vm.userPlaylists.collectAsStateWithLifecycle()
 
-    var sort by remember { mutableStateOf(SortOption.DATE_ADDED) }
+    val sort by vm.tracksSort.collectAsStateWithLifecycle()
     val sorted = remember(allTracks, sort) { vm.sortedTracks(sort) }
 
     // ---- Single-track actions ----
@@ -92,7 +92,7 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
         Column(Modifier.fillMaxSize()) {
             SortHeader(
                 current = sort,
-                onSort = { sort = it },
+                onSort = { vm.setTracksSort(it) },
                 onShuffle = { player.playQueue(sorted.shuffled(), 0, "All tracks") },
                 onPlayAll = { player.playQueue(sorted, 0, "All tracks") }
             )
