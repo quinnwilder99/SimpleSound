@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +68,25 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
         selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
     }
     fun clearSelection() { selectedIds = emptySet() }
+
+    // Temporarily hide the global persistent mini player while the bottom
+    // selection action bar or any modal sheet/dialog is open, so it can't
+    // overlay and intercept touches over them. Mirrors SearchScreen.
+    val anyOverlayOpen = selectionMode ||
+        sheetTrack != null ||
+        addTrack != null ||
+        deleteTrack != null ||
+        detailsTrack != null ||
+        showAddMany ||
+        showDeleteMany
+    LaunchedEffect(anyOverlayOpen) {
+        vm.setMiniPlayerHidden(anyOverlayOpen)
+    }
+    // Always release the flag when leaving the screen so the mini player is
+    // restored for the rest of the app.
+    DisposableEffect(Unit) {
+        onDispose { vm.setMiniPlayerHidden(false) }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
