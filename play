@@ -27,10 +27,6 @@ class PlayerController(private val context: Context) {
     private var controller: MediaController? = null
     private val trackIndex = mutableMapOf<String, Track>()
 
-    // ---- Temp queue ----
-    // The ordered list of tracks currently loaded into the player, plus the index
-    // of the playing item. This is a *temp* queue: reordering it here does not
-    // modify the source playlist/all-tracks list it was built from.
     private val _queue = MutableStateFlow<List<Track>>(emptyList())
     val queue: StateFlow<List<Track>> = _queue.asStateFlow()
 
@@ -43,124 +39,33 @@ class PlayerController(private val context: Context) {
     private val _currentTrack = MutableStateFlow<Track?>(null)
     val currentTrack: StateFlow<Track?> = _currentTrack.asStateFlow()
 
-    /**
-     * The most recently played track. Persists across pause/stop so the mini player
-     * can keep showing the last played title even when [currentTrack] is cleared.
-     */
     private val _lastPlayedTrack = MutableStateFlow<Track?>(null)
     val lastPlayedTrack: StateFlow<Track?> = _lastPlayedTrack.asStateFlow()
 
     /**
      * Restore the last played track from persistence (e.g. after app restart).
-     * Only seeds the displayed value if no track is currently set, so it never
-     * clobbers a live session.
+     * Only seeds the value if no track is currently set, so it never clobbers a
+     * live session. Also seeds the persisted [positionMs] and [durationMs] so the
+     * mini player / Now Playing screen show the correct timeline immediately.
      *
-     * When [autoPrepareAndPause] is true (the default) and a MediaController is
-     * connected, the track is also loaded into the Media3 player and prepared in
-     * a *paused* state at [positionMs]. This makes the "Play" button resume from
-     * the saved spot without rebuilding the whole queue. Pass `false` when the
-     * caller only wants to upgrade the displayed track snapshot (e.g. once the
-     * live library has loaded) without disturbing existing playback state.
+     * Pass [autoPrepareAndPause] = true (default) to also load the track into the
+     * Media3 controller in a paused state so a subsequent tap on Play can resume
+     * from [positionMs] without having to reselect the track.
      */
     fun restoreLastPlayedTrack(
         track: Track?,
-        positionMs: Long = 0L,
+        positionMs: Long = -1L,
         autoPrepareAndPause: Boolean = true
     ) {
         if (track == null) return
-        if (_lastPlayedTrack.value == null) _lastPlayedTrack.value = track
-        if (_currentTrack.value == null) {
-            _currentTrack.value = track
-            trackIndex[track.id.toString()] = track
+        if (_lastPlayedTrack.value == null) {
+            _lastPlayedTrack.value = track
+            if (positionMs >= 0L) _positionMs.value = positionMs
+            if (_durationMs.value <= 0L && track.durationMs > 0L) {
+                _durationMs.value = track.durationMs
+            }
         }
-        // Surface the restored position/duration immediately so the timeline shows
-        // the correct progress bar before the controller is connected.
-        if (positionMs > 0) _positionMs.value = positionMs
-        if (track.durationMs > 0) _durationMs.value = track.durationMs
-        if (autoPrepareAndPause) preparePaused(track, positionMs)
-    }
-
-    /**
-     * Restore a full temp queue from persistence (e.g. after app restart). The
-     * [tracks] are loaded into the Media3 player in order, with the playing window
-     * set to [startIndex] and the cursor moved to [positionMs]. The player is
-     * prepared but left *paused* so the user must press Play to resume — we never
-     * auto-resume playback on launch. Also seeds [lastPlayedTrack] /
-     * [currentTrack] / the queue flows so the UI reflects the restored state
-     * immediately. Safe to call before [connect]; the prepare is a no-op until a
-     * controller attaches (callers may re-invoke once connected if needed).
-     */
-    fun restoreQueue(
-        tracks: List<Track>,
-        startIndex: Int,
-        sourceTitle: String,
-        positionMs: Long = 0L
-    ) {
-        if (tracks.isEmpty()) return
-        val safeIndex = startIndex.coerceIn(0, tracks.lastIndex)
-        // Seed trackIndex for every item so onMediaItemTransition can resolve ids.
-        trackIndex.clear()
-        tracks.forEach { trackIndex[it.id.toString()] = it }
-        _queue.value = tracks
-        _queueTitle.value = sourceTitle
-        _queueIndex.value = safeIndex
-        _currentTrack.value = tracks[safeIndex]
-        _lastPlayedTrack.value = tracks[safeIndex]
-        if (positionMs > 0) _positionMs.value = positionMs
-        val dur = tracks[safeIndex].durationMs
-        if (dur > 0) _durationMs.value = dur
-        // Load into Media3 (paused) so Play resumes from the saved spot.
-        prepareQueuePaused(tracks, safeIndex, positionMs)
-    }
-
-    /**
-     * Load [track] into the Media3 controller as a single-item queue and prepare
-     * it paused at [positionMs]. No-op if the controller is not connected yet.
-     */
-    private fun preparePaused(track: Track, positionMs: Long) {
-        val c = controller ?: return
-        trackIndex[track.id.toString()] = track
-        val item = MediaItem.Builder()
-            .setMediaId(track.id.toString())
-            .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(track.title)
-                    .setArtist(track.artistOrUnknown)
-                    .setAlbumTitle(track.albumOrUnknown)
-                    .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
-                    .build()
-            )
-            .build()
-        c.setMediaItem(item, positionMs.coerceAtLeast(0L))
-        c.prepare()
-        // Do not call play() — we want a paused resume point.
-    }
-
-    /**
-     * Load [tracks] into the Media3 controller as a multi-item queue, start at
-     * [startIndex], and prepare paused at [positionMs]. No-op if the controller
-     * is not connected.
-     */
-    private fun prepareQueuePaused(tracks: List<Track>, startIndex: Int, positionMs: Long) {
-        val c = controller ?: return
-        val items = tracks.map { track ->
-            MediaItem.Builder()
-                .setMediaId(track.id.toString())
-                .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(track.title)
-                        .setArtist(track.artistOrUnknown)
-                        .setAlbumTitle(track.albumOrUnknown)
-                        .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
-                        .build()
-                )
-                .build()
-        }
-        c.setMediaItems(items, startIndex, positionMs.coerceAtLeast(0L))
-        c.prepare()
-        // Paused resume point — don't auto play on launch.
+        if (autoPrepareAndPause) prepareRestoredTrack(track, positionMs)
     }
 
     private val _isPlaying = MutableStateFlow(false)
@@ -172,20 +77,15 @@ class PlayerController(private val context: Context) {
     private val _sleepTimerActive = MutableStateFlow(false)
     val sleepTimerActive: StateFlow<Boolean> = _sleepTimerActive.asStateFlow()
 
-    // ---- Progress / timeline ----
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
 
     private val _durationMs = MutableStateFlow(0L)
     val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
-    // ---- Shuffle / repeat ----
     private val _isShuffleOn = MutableStateFlow(false)
     val isShuffleOn: StateFlow<Boolean> = _isShuffleOn.asStateFlow()
 
-    /**
-     * 0 = off, 1 = repeat all, 2 = repeat one (A-B style track loop).
-     */
     private val _repeatMode = MutableStateFlow(0)
     val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
 
@@ -205,7 +105,6 @@ class PlayerController(private val context: Context) {
                 _currentTrack.value = trackIndex[id]
                 _lastPlayedTrack.value = trackIndex[id]
             }
-            // Keep the queue index in sync with the player's current window index.
             _queueIndex.value = controller?.currentMediaItemIndex ?: -1
             _positionMs.value = 0L
             _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
@@ -235,13 +134,8 @@ class PlayerController(private val context: Context) {
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener({
-            // The service may fail to bind (e.g. process death, permission
-            // revocation). Guard `future.get()` so a connection failure cannot
-            // crash the whole app; we simply leave controller == null and the
-            // UI degrades to a non-playing state safely.
             val c = runCatching { future.get() }.getOrNull() ?: return@addListener
             controller = c.also { it.addListener(listener) }
-            // Sync initial state
             _isShuffleOn.value = controller?.shuffleModeEnabled == true
             _repeatMode.value = when (controller?.repeatMode) {
                 Player.REPEAT_MODE_ONE -> 2
@@ -249,15 +143,8 @@ class PlayerController(private val context: Context) {
                 else -> 0
             }
             _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
-            // If the controller attached *after* we already restored a queue/track
-            // from persistence (onCreate runs before onStart/connect), the earlier
-            // prepare was a no-op. Reload the restored media into Media3 now so the
-            // saved position is honored when the user presses Play — otherwise the
-            // controller has no media items and Play resets to 00:00. Skip this if
-            // the service is already holding a live queue (mediaItemCount > 0) so
-            // we don't clobber an active session.
-            prepareRestoredIfNeeded()
             updateProgressPolling()
+            maybePrepareRestoredTrack()
         }, ContextCompat.getMainExecutor(context))
     }
 
@@ -269,13 +156,6 @@ class PlayerController(private val context: Context) {
         controller = null
     }
 
-    /**
-     * Play [tracks] starting at [startIndex], replacing the current queue.
-     *
-     * @param sourceTitle Optional label describing where this queue came from
-     * (e.g. the playlist name, "All tracks", or "Queue"). Surfaced in the
-     * Now Playing queue sheet so the user knows the context the track came from.
-     */
     fun playQueue(tracks: List<Track>, startIndex: Int = 0, sourceTitle: String = "") {
         val c = controller ?: return
         if (tracks.isEmpty()) return
@@ -299,7 +179,6 @@ class PlayerController(private val context: Context) {
         c.setMediaItems(items, safeIndex, 0L)
         c.prepare()
         c.play()
-        // Track the temp queue for the Now Playing queue sheet.
         _queue.value = tracks
         _queueTitle.value = sourceTitle
         _queueIndex.value = safeIndex
@@ -311,17 +190,17 @@ class PlayerController(private val context: Context) {
 
     fun togglePlayPause() {
         val c = controller ?: return
+        if (c.mediaItemCount == 0) {
+            maybePrepareRestoredTrack()
+            c.play()
+            return
+        }
         if (c.isPlaying) c.pause() else c.play()
     }
 
     fun next() { controller?.seekToNextMediaItem() }
     fun previous() { controller?.seekToPreviousMediaItem() }
 
-    /**
-     * Stop playback entirely. The mini player keeps showing the last played track
-     * title (via [lastPlayedTrack]), but the current track state is cleared so
-     * the play/pause button reflects a stopped state.
-     */
     fun stop() {
         val c = controller ?: return
         _currentTrack.value = null
@@ -329,10 +208,6 @@ class PlayerController(private val context: Context) {
         c.stop()
     }
 
-    /**
-     * Jump to the queue item at [index] without rebuilding the queue. The temp
-     * queue order is preserved; only the playing item changes.
-     */
     fun playQueueItemAt(index: Int) {
         val c = controller ?: return
         val q = _queue.value
@@ -343,12 +218,6 @@ class PlayerController(private val context: Context) {
         c.play()
     }
 
-    /**
-     * Move a queue item from [from] to [to] in the temp queue. The Media3
-     * controller's media items are reordered to match; playback of the current
-     * track continues uninterrupted. The "currently playing" index is updated to
-     * follow the moved item if needed.
-     */
     fun moveQueueItem(from: Int, to: Int) {
         val c = controller
         val q = _queue.value.toMutableList()
@@ -356,8 +225,6 @@ class PlayerController(private val context: Context) {
         val item = q.removeAt(from)
         q.add(to, item)
         _queue.value = q
-        // Rebuild the Media3 queue at the new order while keeping the playing
-        // window position correct.
         val currentTrackId = _currentTrack.value?.id
         trackIndex.clear()
         val items = q.map { track ->
@@ -383,11 +250,6 @@ class PlayerController(private val context: Context) {
         }
     }
 
-    /**
-     * Remove the item at [index] from the temp queue. If it is the current item,
-     * the player advances to the next available item (or stops if the queue is
-     * emptied). Does not affect the source playlist/all-tracks list.
-     */
     fun removeQueueItem(index: Int) {
         val c = controller
         val q = _queue.value.toMutableList()
@@ -409,21 +271,16 @@ class PlayerController(private val context: Context) {
         }
     }
 
-    /** Seek to [positionMs] within the current track. */
     fun seekTo(positionMs: Long) {
         controller?.seekTo(positionMs.coerceAtLeast(0))
         _positionMs.value = positionMs.coerceAtLeast(0)
     }
 
-    /** Toggle shuffle on/off. */
     fun toggleShuffle() {
         val c = controller ?: return
         c.shuffleModeEnabled = !c.shuffleModeEnabled
     }
 
-    /**
-     * Cycle repeat mode: off -> repeat all -> repeat one (A-B) -> off.
-     */
     fun cycleRepeatMode() {
         val c = controller ?: return
         c.repeatMode = when (c.repeatMode) {
@@ -433,18 +290,12 @@ class PlayerController(private val context: Context) {
         }
     }
 
-    /** Set playback speed (0.25x–4.0x clamped). 1.0f is normal speed. */
     fun setSpeed(speed: Float) {
         val s = speed.coerceIn(0.1f, 2.0f)
         _playbackSpeed.value = s
         controller?.playbackParameters = PlaybackParameters(s, 1.0f)
     }
 
-    /**
-     * Pause playback after [minutes]. Only one sleep timer is active at a time;
-     * setting a new one cancels the previous. Pass 0 (or call [cancelSleepTimer])
-     * to cancel.
-     */
     fun setSleepTimer(minutes: Int) {
         cancelSleepTimer()
         if (minutes <= 0) return
@@ -464,26 +315,6 @@ class PlayerController(private val context: Context) {
         _sleepTimerActive.value = false
     }
 
-    /**
-     * Push the restored queue or single track into the just-attached Media3
-     * controller (paused at the saved position). Called from [connect] once the
-     * controller binds. No-op if the service is already playing something
-     * (mediaItemCount > 0), or if nothing was restored.
-     */
-    private fun prepareRestoredIfNeeded() {
-        val c = controller ?: return
-        if (c.mediaItemCount > 0) return
-        val pos = _positionMs.value
-        val q = _queue.value
-        if (q.isNotEmpty() && _queueIndex.value >= 0) {
-            val idx = _queueIndex.value.coerceIn(0, q.lastIndex)
-            prepareQueuePaused(q, idx, pos)
-        } else {
-            val track = _lastPlayedTrack.value ?: return
-            preparePaused(track, pos)
-        }
-    }
-
     private fun updateProgressPolling() {
         progressRunnable?.let { mainHandler.removeCallbacks(it) }
         if (_isPlaying.value) {
@@ -499,5 +330,40 @@ class PlayerController(private val context: Context) {
             progressRunnable = r
             mainHandler.post(r)
         }
+    }
+
+    private fun prepareRestoredTrack(track: Track, positionMs: Long = -1L) {
+        val c = controller ?: return
+        if (c.mediaItemCount > 0) return
+        if (_currentTrack.value != null) return
+        trackIndex.clear()
+        trackIndex[track.id.toString()] = track
+        val item = MediaItem.Builder()
+            .setMediaId(track.id.toString())
+            .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(track.title)
+                    .setArtist(track.artistOrUnknown)
+                    .setAlbumTitle(track.albumOrUnknown)
+                    .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
+                    .build()
+            )
+            .build()
+        val startMs = if (positionMs >= 0L) positionMs else 0L
+        c.setMediaItem(item, startMs)
+        c.prepare()
+        c.playWhenReady = false
+        _queue.value = listOf(track)
+        _queueTitle.value = "Last played"
+        _queueIndex.value = 0
+    }
+
+    private fun maybePrepareRestoredTrack() {
+        val track = _lastPlayedTrack.value ?: return
+        val c = controller ?: return
+        if (c.mediaItemCount > 0 || _currentTrack.value != null) return
+        val pos = _positionMs.value.takeIf { it >= 0L } ?: -1L
+        prepareRestoredTrack(track, pos)
     }
 }

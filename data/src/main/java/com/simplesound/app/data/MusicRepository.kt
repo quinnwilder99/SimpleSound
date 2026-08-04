@@ -32,6 +32,11 @@ object MusicRepository {
     private const val KEY_LAST_PLAYED_ARTIST = "last_played_artist"
     private const val KEY_LAST_PLAYED_URI = "last_played_uri"
     private const val KEY_LAST_PLAYED_ALBUM_ART = "last_played_album_art"
+    private const val KEY_LAST_PLAYED_DURATION = "last_played_duration_ms"
+    private const val KEY_LAST_PLAYED_POSITION = "last_played_position_ms"
+    private const val KEY_QUEUE_TITLE = "last_queue_title"
+    private const val KEY_QUEUE_TRACK_IDS = "last_queue_track_ids"
+    private const val KEY_QUEUE_INDEX = "last_queue_index"
 
     private lateinit var prefs: SharedPreferences
 
@@ -116,13 +121,22 @@ object MusicRepository {
     //
     // The mini player survives app restarts by remembering the most recently
     // played track. We persist a *full snapshot* (id, title, artist, uri,
-    // albumArtUri) — not just the id — so the bar can reappear immediately on
-    // launch even before the MediaStore scan finishes loading the real library.
-    // The id is stored separately so the caller can refresh the snapshot from
-    // the live library once it is available.
+    // albumArtUri, durationMs, positionMs) — not just the id — so the bar can
+    // reappear immediately on launch with the correct timeline, even before the
+    // MediaStore scan finishes loading the real library. The id is stored
+    // separately so the caller can refresh the snapshot from the live library
+    // once it is available.
 
-    /** Persist a snapshot of the most recently played track (or clear with null). */
-    fun saveLastPlayedTrack(track: com.simplesound.app.data.model.Track?) {
+    /**
+     * Persist a snapshot of the most recently played track (or clear with null).
+     * Also persists the track's [durationMs] and the optional [positionMs] so the
+     * mini player / Now Playing screen can restore the correct timeline after an
+     * app restart, and so playback can resume from where it left off.
+     */
+    fun saveLastPlayedTrack(
+        track: com.simplesound.app.data.model.Track?,
+        positionMs: Long = -1L
+    ) {
         if (!this::prefs.isInitialized) return
         val e = prefs.edit()
         if (track == null) {
@@ -131,6 +145,8 @@ object MusicRepository {
                 .remove(KEY_LAST_PLAYED_ARTIST)
                 .remove(KEY_LAST_PLAYED_URI)
                 .remove(KEY_LAST_PLAYED_ALBUM_ART)
+                .remove(KEY_LAST_PLAYED_DURATION)
+                .remove(KEY_LAST_PLAYED_POSITION)
                 .apply()
             return
         }
@@ -139,6 +155,8 @@ object MusicRepository {
             .putString(KEY_LAST_PLAYED_ARTIST, track.artist)
             .putString(KEY_LAST_PLAYED_URI, track.uri)
             .putString(KEY_LAST_PLAYED_ALBUM_ART, track.albumArtUri)
+            .putLong(KEY_LAST_PLAYED_DURATION, track.durationMs.coerceAtLeast(0L))
+            .putLong(KEY_LAST_PLAYED_POSITION, positionMs.coerceAtLeast(0L))
             .apply()
     }
 
@@ -148,9 +166,10 @@ object MusicRepository {
 
     /**
      * The persisted last-played track snapshot, or null if none was saved.
-     * This is a lightweight reconstruction (id + title + artist + uri + art) so
-     * the mini player can render immediately on launch; callers may upgrade it
-     * to the full live [Track] via [trackById] once the library has loaded.
+     * This is a lightweight reconstruction (id + title + artist + uri + art +
+     * duration) so the mini player can render immediately on launch; callers may
+     * upgrade it to the full live [Track] via [trackById] once the library has
+     * loaded.
      */
     fun lastPlayedTrack(): com.simplesound.app.data.model.Track? {
         if (!this::prefs.isInitialized) return null
@@ -161,11 +180,57 @@ object MusicRepository {
             title = prefs.getString(KEY_LAST_PLAYED_TITLE, null) ?: "",
             artist = prefs.getString(KEY_LAST_PLAYED_ARTIST, null) ?: "",
             album = "",
-            durationMs = 0L,
+            durationMs = prefs.getLong(KEY_LAST_PLAYED_DURATION, 0L),
             uri = prefs.getString(KEY_LAST_PLAYED_URI, null) ?: "",
             albumArtUri = prefs.getString(KEY_LAST_PLAYED_ALBUM_ART, null)
         )
     }
+
+    /** The persisted playback position (ms) of the last played track, or 0. */
+    fun lastPlayedPosition(): Long =
+        if (this::prefs.isInitialized) prefs.getLong(KEY_LAST_PLAYED_POSITION, 0L) else 0L
+
+    // ---------- Queue (persistence) ----------
+    //
+    // The temp queue (the ordered list of tracks currently loaded into the player,
+    // the playing index, and a label describing where it came from) is persisted as
+    // a comma-joined list of track ids so it can be rebuilt from the live library
+    // after an app restart. Only ids survive — the full [Track] objects are
+    // re-resolved from the in-memory library once it has loaded, so any track that
+    // was deleted between sessions is simply dropped.
+
+    /** Persist a snapshot of the current temp queue (or clear it with null/empty). */
+    fun saveQueue(title: String?, trackIds: List<Long>?, index: Int) {
+        if (!this::prefs.isInitialized) return
+        val e = prefs.edit()
+        if (trackIds.isNullOrEmpty()) {
+            e.remove(KEY_QUEUE_TITLE)
+                .remove(KEY_QUEUE_TRACK_IDS)
+                .remove(KEY_QUEUE_INDEX)
+                .apply()
+            return
+        }
+        e.putString(KEY_QUEUE_TITLE, title ?: "")
+            .putString(KEY_QUEUE_TRACK_IDS, trackIds.joinToString(","))
+            .putInt(KEY_QUEUE_INDEX, index.coerceAtLeast(0))
+            .apply()
+    }
+
+    /** The persisted queue title, or "" if none was saved. */
+    fun lastQueueTitle(): String =
+        if (this::prefs.isInitialized) prefs.getString(KEY_QUEUE_TITLE, "") ?: "" else ""
+
+    /** The persisted queue track ids, or an empty list if none was saved. */
+    fun lastQueueTrackIds(): List<Long> {
+        if (!this::prefs.isInitialized) return emptyList()
+        val raw = prefs.getString(KEY_QUEUE_TRACK_IDS, null) ?: return emptyList()
+        if (raw.isEmpty()) return emptyList()
+        return raw.split(",").mapNotNull { it.toLongOrNull() }
+    }
+
+    /** The persisted queue index, or -1 if none was saved. */
+    fun lastQueueIndex(): Int =
+        if (this::prefs.isInitialized) prefs.getInt(KEY_QUEUE_INDEX, -1) else -1
 
     // ---------- Library loading ----------
 
