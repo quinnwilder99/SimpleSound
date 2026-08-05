@@ -46,7 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.data.model.PlaylistKind
-import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
@@ -78,8 +77,17 @@ fun PlaylistDetailScreen(
 
     if (playlist == null) { onBack(); return }
     val playlistTracks = vm.tracksByIds(playlist.trackIds)
-    var sort by remember { mutableStateOf(SortOption.DATE_ADDED) }
-    val tracks = remember(playlistTracks, sort) { vm.sortTracks(playlistTracks, sort) }
+    // Persisted per-playlist sort: the chosen sort stays put across app restarts
+    // and is never reset until the user explicitly changes it.
+    val sort by vm.playlistSort(playlistId).collectAsStateWithLifecycle()
+    // Bumped after each custom-order move so the list recomputes from the newly
+    // persisted order. (The custom order lives in SharedPreferences, not a flow,
+    // so we need an explicit recomposition trigger.)
+    var customOrderVersion by remember { mutableStateOf(0) }
+    val customOrderMode = sort == com.simplesound.app.data.model.SortOption.CUSTOM_ORDER
+    val tracks = remember(playlistTracks, sort, customOrderVersion) {
+        vm.sortPlaylistTracks(playlistId, playlistTracks, sort)
+    }
     val editable = playlist.kind == PlaylistKind.USER
 
     var menuOpen by remember { mutableStateOf(false) }
@@ -191,13 +199,14 @@ fun PlaylistDetailScreen(
                 item {
                     SortHeader(
                         current = sort,
-                        onSort = { sort = it },
+                        onSort = { vm.setPlaylistSort(playlistId, it) },
                         onShuffle = { if (tracks.isNotEmpty()) player.playQueue(tracks.shuffled(), 0, playlist.name) },
                         onPlayAll = { if (tracks.isNotEmpty()) player.playQueue(tracks, 0, playlist.name) }
                     )
                 }
                 items(tracks, key = { it.id }) { track ->
                     val selected = track.id in selectedIds
+                    val index = tracks.indexOf(track)
                     TrackRow(
                         track = track,
                         selectionMode = selectionMode,
@@ -207,11 +216,26 @@ fun PlaylistDetailScreen(
                             if (selectionMode) {
                                 toggleSelected(track.id)
                             } else {
-                                player.playQueue(tracks, tracks.indexOf(track), playlist.name)
+                                player.playQueue(tracks, index, playlist.name)
                                 onOpenNowPlaying()
                             }
                         },
-                        onMore = { sheetTrack = track }
+                        onMore = { sheetTrack = track },
+                        customOrderMode = customOrderMode,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < tracks.lastIndex,
+                        onMoveUp = {
+                            vm.moveTrackInCustomOrder(
+                                playlistId, track.id, up = true, tracks.map { it.id }
+                            )
+                            customOrderVersion++
+                        },
+                        onMoveDown = {
+                            vm.moveTrackInCustomOrder(
+                                playlistId, track.id, up = false, tracks.map { it.id }
+                            )
+                            customOrderVersion++
+                        }
                     )
                 }
             }

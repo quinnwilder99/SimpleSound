@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "simplesound_settings")
 
+/** Default sort applied to a playlist the user has never explicitly sorted. */
+val DEFAULT_PLAYLIST_SORT: SortOption = SortOption.DATE_ADDED
+
 /**
  * Persists the two "simple" settings that are live in v0.1: the accent color and
  * the tab configuration (order + enabled). Encoded compactly so no schema is
@@ -26,6 +29,9 @@ class SettingsStore(private val context: Context) {
         val ACCENT = stringPreferencesKey("accent")
         val TABS = stringPreferencesKey("tab_config")
         val TRACKS_SORT = stringPreferencesKey("tracks_sort")
+        // Encoded "id1=NAME,id2=CUSTOM_ORDER,..." so each playlist remembers its
+        // own last-chosen sort, independent of the Tracks tab sort.
+        val PLAYLIST_SORTS = stringPreferencesKey("playlist_sorts")
     }
 
     val accent: Flow<AccentColor> = context.dataStore.data.map { prefs ->
@@ -53,6 +59,21 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[Keys.TRACKS_SORT] = option.name }
     }
 
+    /** The user's last-chosen sort for [playlistId], or [DEFAULT_PLAYLIST_SORT]. */
+    fun playlistSort(playlistId: String): Flow<SortOption> =
+        context.dataStore.data.map { prefs ->
+            decodePlaylistSorts(prefs[Keys.PLAYLIST_SORTS])[playlistId] ?: DEFAULT_PLAYLIST_SORT
+        }
+
+    /** Persist the chosen [option] for [playlistId]. */
+    suspend fun setPlaylistSort(playlistId: String, option: SortOption) {
+        context.dataStore.edit { prefs ->
+            val current = decodePlaylistSorts(prefs[Keys.PLAYLIST_SORTS]).toMutableMap()
+            current[playlistId] = option
+            prefs[Keys.PLAYLIST_SORTS] = encodePlaylistSorts(current)
+        }
+    }
+
     // ---- encoding: "FAVORITES:1,TRACKS:1,PLAYLISTS:0,..." ----
 
     private fun encodeTabs(settings: List<TabSetting>): String =
@@ -77,4 +98,23 @@ class SettingsStore(private val context: Context) {
 
     private fun defaultTabs(): List<TabSetting> =
         Tab.Default.map { TabSetting(it, enabled = true) }
+
+    // ---- encodes a Map<playlistId, SortOption> as "id1=NAME,id2=CUSTOM_ORDER,..."
+    private fun encodePlaylistSorts(map: Map<String, SortOption>): String =
+        map.entries.joinToString(",") { (id, opt) ->
+            // Guard against commas in ids by encoding the separator; ids are stable
+            // machine strings (e.g. "user-...") so this is defensive only.
+            "${id.replace(",", "\u0003")}=${opt.name}"
+        }
+
+    private fun decodePlaylistSorts(raw: String?): Map<String, SortOption> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return raw.split(",").mapNotNull { token ->
+            val eq = token.indexOf('=')
+            if (eq < 0) return@mapNotNull null
+            val id = token.substring(0, eq).replace("\u0003", ",")
+            val opt = SortOption.fromName(token.substring(eq + 1))
+            id to opt
+        }.toMap()
+    }
 }

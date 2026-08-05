@@ -37,6 +37,7 @@ object MusicRepository {
     private const val KEY_QUEUE_TITLE = "last_queue_title"
     private const val KEY_QUEUE_TRACK_IDS = "last_queue_track_ids"
     private const val KEY_QUEUE_INDEX = "last_queue_index"
+    private const val KEY_CUSTOM_ORDERS = "custom_orders"
 
     private lateinit var prefs: SharedPreferences
 
@@ -257,6 +258,8 @@ object MusicRepository {
             SortOption.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
             SortOption.ARTIST -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.artistOrUnknown }
             SortOption.LENGTH -> compareBy { it.durationMs }
+            // Custom order only applies within a playlist; fall back to date added.
+            SortOption.CUSTOM_ORDER -> compareByDescending { it.dateAddedSec }
         }
     )
 
@@ -267,8 +270,90 @@ object MusicRepository {
             SortOption.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
             SortOption.ARTIST -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.artistOrUnknown }
             SortOption.LENGTH -> compareBy { it.durationMs }
+            SortOption.CUSTOM_ORDER -> compareBy { 0 } // no playlist context; keep input order
         }
     )
+
+    /**
+     * Sort a playlist's tracks by [option]. When [option] is [SortOption.CUSTOM_ORDER],
+     * the tracks are ordered by the user-saved custom order for [playlistId] (any
+     * tracks not present in the saved order are appended in their natural order).
+     */
+    fun sortPlaylistTracks(
+        playlistId: String,
+        tracks: List<Track>,
+        option: SortOption
+    ): List<Track> {
+        if (option == SortOption.CUSTOM_ORDER) {
+            val order = customOrderFor(playlistId)
+            if (order.isEmpty()) return tracks
+            val index = order.withIndex().associate { (i, id) -> id to i }
+            return tracks.sortedBy { index[it.id] ?: Int.MAX_VALUE }
+        }
+        return sortTracks(tracks, option)
+    }
+
+    // ---------- Custom order (per playlist) ----------
+    //
+    // Persisted as a single blob: records separated by \u0001, each record is
+    // "<playlistId>\u0002id1,id2,id3". Lets the user manually reorder tracks within
+    // any playlist (including native ones like Favorite tracks) and have that order
+    // survive app restarts.
+
+    /** The saved custom order of track ids for [playlistId], or empty if none. */
+    fun customOrderFor(playlistId: String): List<Long> =
+        if (this::prefs.isInitialized) decodeCustomOrders()[playlistId].orEmpty() else emptyList()
+
+    /** Overwrite the saved custom order for [playlistId]. */
+    fun setCustomOrder(playlistId: String, orderedTrackIds: List<Long>) {
+        val all = decodeCustomOrders().toMutableMap()
+        if (orderedTrackIds.isEmpty()) all.remove(playlistId) else all[playlistId] = orderedTrackIds
+        persistCustomOrders(all)
+    }
+
+    /**
+     * Move [trackId] one slot [up] within the saved custom order for [playlistId].
+     * If no custom order exists yet, seeds it from [currentOrder] (the playlist's
+     * current track id sequence) so the first reorder has something to work with.
+     */
+    fun moveTrackInCustomOrder(
+        playlistId: String,
+        trackId: Long,
+        up: Boolean,
+        currentOrder: List<Long>
+    ) {
+        val base = customOrderFor(playlistId).ifEmpty { currentOrder }
+        val idx = base.indexOf(trackId)
+        if (idx < 0) return
+        val target = if (up) idx - 1 else idx + 1
+        if (target < 0 || target >= base.size) return
+        val swapped = base.toMutableList()
+        val tmp = swapped[idx]
+        swapped[idx] = swapped[target]
+        swapped[target] = tmp
+        setCustomOrder(playlistId, swapped)
+    }
+
+    private fun persistCustomOrders(orders: Map<String, List<Long>>) {
+        if (!this::prefs.isInitialized) return
+        val raw = orders.entries.joinToString("\u0001") { (id, list) ->
+            "$id\u0002${list.joinToString(",")}"
+        }
+        prefs.edit().putString(KEY_CUSTOM_ORDERS, raw).apply()
+    }
+
+    private fun decodeCustomOrders(): Map<String, List<Long>> {
+        if (!this::prefs.isInitialized) return emptyMap()
+        val raw = prefs.getString(KEY_CUSTOM_ORDERS, null) ?: return emptyMap()
+        if (raw.isEmpty()) return emptyMap()
+        return raw.split("\u0001").mapNotNull { record ->
+            val parts = record.split("\u0002")
+            if (parts.size < 2) return@mapNotNull null
+            val id = parts[0]
+            val ids = parts[1].split(",").mapNotNull { it.toLongOrNull() }
+            id to ids
+        }.toMap()
+    }
 
     fun searchTracks(query: String): List<Track> {
         val q = query.trim()

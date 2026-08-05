@@ -5,7 +5,8 @@ enum class SortOption(val label: String) {
     DATE_ADDED("Date added"),
     NAME("Name"),
     ARTIST("Artist"),
-    LENGTH("Length");
+    LENGTH("Length"),
+    CUSTOM_ORDER("Custom order");
 
     companion object {
         /** Resolves a stored sort name back to a [SortOption], defaulting to [DATE_ADDED]. */

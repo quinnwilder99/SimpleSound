@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.simplesound.app.data.DEFAULT_PLAYLIST_SORT
 import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.SettingsStore
 import com.simplesound.app.data.model.SortOption
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -72,9 +74,43 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
 
     fun setTracksSort(option: SortOption) = viewModelScope.launch { settings.setTracksSort(option) }
 
+    /**
+     * In-memory cache of each playlist's last-known sort option. Seeding new
+     * [playlistSort] StateFlows from here (instead of an unconditional
+     * [DEFAULT_PLAYLIST_SORT]) avoids a one-frame flash of the default sort
+     * when a playlist was last sorted by Custom order — which previously made
+     * the list visibly jump whenever the detail screen was reopened.
+     */
+    private val playlistSortCache = mutableMapOf<String, SortOption>()
+
+    /**
+     * The user's last-chosen sort for a specific playlist (persisted per playlist).
+     * The returned [StateFlow] is seeded from [playlistSortCache] when a cached
+     * value exists, falling back to [DEFAULT_PLAYLIST_SORT] only on the very first
+     * open. The cache is kept in sync by [setPlaylistSort] and by collection of
+     * the underlying persisted flow, so subsequent recompositions reuse the
+     * last-applied sort instead of resetting to the default.
+     */
+    fun playlistSort(playlistId: String): StateFlow<SortOption> {
+        val seed = playlistSortCache[playlistId] ?: DEFAULT_PLAYLIST_SORT
+        return settings.playlistSort(playlistId)
+            .onEach { playlistSortCache[playlistId] = it }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, seed)
+    }
+
+    fun setPlaylistSort(playlistId: String, option: SortOption) =
+        viewModelScope.launch {
+            playlistSortCache[playlistId] = option
+            settings.setPlaylistSort(playlistId, option)
+        }
+
     // ---- Library / playlist passthroughs ----
     fun sortedTracks(option: SortOption) = MusicRepository.sortedTracks(option)
     fun sortTracks(tracks: List<Track>, option: SortOption) = MusicRepository.sortTracks(tracks, option)
+    fun sortPlaylistTracks(playlistId: String, tracks: List<Track>, option: SortOption) =
+        MusicRepository.sortPlaylistTracks(playlistId, tracks, option)
+    fun moveTrackInCustomOrder(playlistId: String, trackId: Long, up: Boolean, currentOrder: List<Long>) =
+        MusicRepository.moveTrackInCustomOrder(playlistId, trackId, up, currentOrder)
     fun searchTracks(query: String) = MusicRepository.searchTracks(query)
     fun isFavorite(trackId: Long) = MusicRepository.isFavorite(trackId)
     fun toggleFavoriteTrack(trackId: Long) = MusicRepository.toggleFavoriteTrack(trackId)

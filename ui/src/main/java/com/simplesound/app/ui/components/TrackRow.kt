@@ -1,6 +1,7 @@
 package com.simplesound.app.ui.components
 
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
@@ -30,6 +33,11 @@ import com.simplesound.app.data.model.Track
  * When [selectionMode] is true the row shows a selection indicator instead of the
  * overflow button and toggles selection on tap (rather than playing). A long-press
  * enters selection mode via [onLongClick].
+ *
+ * When [customOrderMode] is true (the playlist is sorted by Custom order) the row
+ * shows up/down arrows on the right instead of the overflow button, letting the
+ * user reorder the track within the playlist. Reordering is only permitted in this
+ * mode — the arrows never appear under any other sort.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -40,7 +48,12 @@ fun TrackRow(
     modifier: Modifier = Modifier,
     selectionMode: Boolean = false,
     selected: Boolean = false,
-    onLongClick: () -> Unit = {}
+    onLongClick: () -> Unit = {},
+    customOrderMode: Boolean = false,
+    canMoveUp: Boolean = true,
+    canMoveDown: Boolean = true,
+    onMoveUp: () -> Unit = {},
+    onMoveDown: () -> Unit = {}
 ) {
     Row(
         modifier = modifier
@@ -85,16 +98,42 @@ fun TrackRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        if (selectionMode) {
-            // Hide overflow button while selecting; keep spacing consistent.
-            Box(Modifier.size(48.dp))
-        } else {
-            IconButton(onClick = onMore) {
-                Icon(
-                    Icons.Rounded.MoreVert,
-                    contentDescription = "More options",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        when {
+            selectionMode -> {
+                // Hide overflow/reorder buttons while selecting; keep spacing consistent.
+                Box(Modifier.size(48.dp))
+            }
+            customOrderMode -> {
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+                        Icon(
+                            Icons.Rounded.ArrowUpward,
+                            contentDescription = "Move up",
+                            tint = if (canMoveUp) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                    }
+                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+                        Icon(
+                            Icons.Rounded.ArrowDownward,
+                            contentDescription = "Move down",
+                            tint = if (canMoveDown) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                    }
+                }
+            }
+            else -> {
+                IconButton(onClick = onMore) {
+                    Icon(
+                        Icons.Rounded.MoreVert,
+                        contentDescription = "More options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
