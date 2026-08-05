@@ -34,10 +34,10 @@ import com.simplesound.app.data.model.Track
  * overflow button and toggles selection on tap (rather than playing). A long-press
  * enters selection mode via [onLongClick].
  *
- * When [customOrderMode] is true (the playlist is sorted by Custom order) the row
- * shows up/down arrows on the right instead of the overflow button, letting the
- * user reorder the track within the playlist. Reordering is only permitted in this
- * mode — the arrows never appear under any other sort.
+ * When both [selectionMode] and [customOrderMode] are true the row shows up/down
+ * arrows on the right so the user can reorder the track within the playlist.
+ * Reordering is only permitted while the selection bar is present — the arrows
+ * never appear outside that combined mode.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -99,11 +99,9 @@ fun TrackRow(
             )
         }
         when {
-            selectionMode -> {
-                // Hide overflow/reorder buttons while selecting; keep spacing consistent.
-                Box(Modifier.size(48.dp))
-            }
-            customOrderMode -> {
+            // Custom-order reordering is only permitted while the selection bar
+            // is present; otherwise fall through to the normal overflow button.
+            selectionMode && customOrderMode -> {
                 Row(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
@@ -125,6 +123,10 @@ fun TrackRow(
                         )
                     }
                 }
+            }
+            selectionMode -> {
+                // Hide overflow/reorder buttons while selecting; keep spacing consistent.
+                Box(Modifier.size(48.dp))
             }
             else -> {
                 IconButton(onClick = onMore) {

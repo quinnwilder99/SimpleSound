@@ -222,8 +222,8 @@ fun PlaylistDetailScreen(
                         },
                         onMore = { sheetTrack = track },
                         customOrderMode = customOrderMode,
-                        canMoveUp = index > 0,
-                        canMoveDown = index < tracks.lastIndex,
+                        canMoveUp = selectionMode && index > 0,
+                        canMoveDown = selectionMode && index < tracks.lastIndex,
                         onMoveUp = {
                             vm.moveTrackInCustomOrder(
                                 playlistId, track.id, up = true, tracks.map { it.id }
