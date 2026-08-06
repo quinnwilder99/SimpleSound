@@ -1,5 +1,6 @@
-﻿package com.simplesound.app.playback
+package com.simplesound.app.playback
 
+import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
@@ -12,12 +13,27 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
+/**
+ * Foreground media service that owns the ExoPlayer instance and exposes it as a
+ * [MediaSession]. The UI talks to it through a MediaController (see [PlayerController]),
+ * which gives us system media notifications, lock-screen controls and background
+ * playback for free.
+ *
+ * This service also owns the **sleep timer** so that the countdown keeps running
+ * (and the pause fires) while the app is in the background. The Activity-owned
+ * [PlayerController] is torn down in onStop(); the service is not, so the timer
+ * must live here. The active/remaining state is exposed via companion-object
+ * StateFlows so the UI can observe it from any process component, and the
+ * deadline is persisted to SharedPreferences so it survives service recreation.
+ */
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: Player
 
+    private val sleepPrefs by lazy { getSharedPreferences("simplesound_sleep_timer", Context.MODE_PRIVATE) }
     private val sleepHandler = Handler(Looper.getMainLooper())
     private var sleepRunnable: Runnable? = null
     private var sleepTicker: Runnable? = null
@@ -36,10 +52,6 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    private val sleepPrefs by lazy {
-        getSharedPreferences(SLEEP_PREFS, android.content.Context.MODE_PRIVATE)
-    }
-
     override fun onCreate() {
         super.onCreate()
         player = ExoPlayer.Builder(this)
@@ -48,16 +60,23 @@ class PlaybackService : MediaSessionService() {
                     .setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .build(),
-                true
+                /* handleAudioFocus = */ true
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
+
         mediaSession = MediaSession.Builder(this, player).build()
+
+        // Resume a sleep timer that was active before the service was recreated.
         restoreSleepTimerIfNeeded()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
+    /**
+     * Handle set/cancel sleep-timer intents forwarded by [PlayerController]. We
+     * must call through to super so Media3's session-management continues to work.
+     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_SET_SLEEP_TIMER -> {
@@ -69,6 +88,12 @@ class PlaybackService : MediaSessionService() {
         return super.onStartCommand(intent, flags, startId)
     }
 
+    /**
+     * Pause playback after [minutes]. Only one sleep timer is active at a time.
+     * Uses [SystemClock.elapsedRealtime] (monotonic) and a self-correcting ticker
+     * keyed off the fixed end time. The deadline is persisted so the timer
+     * survives service recreation.
+     */
     fun setSleepTimer(minutes: Int) {
         cancelSleepTimerInternal()
         if (minutes <= 0) return
@@ -77,8 +102,10 @@ class PlaybackService : MediaSessionService() {
         _sleepTimerRemainingMs.value = totalMs
         sleepEndElapsed = SystemClock.elapsedRealtime() + totalMs
         sleepPrefs.edit().putLong(KEY_DEADLINE_ELAPSED, sleepEndElapsed).apply()
+
         sleepTicker = ticker
         sleepHandler.post(ticker)
+
         val r = Runnable { fireSleepTimer() }
         sleepRunnable = r
         sleepHandler.postDelayed(r, totalMs)
@@ -145,17 +172,18 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
-        private const val SLEEP_PREFS = "simplesound_sleep_timer"
         private const val KEY_DEADLINE_ELAPSED = "deadline_elapsed"
 
         const val ACTION_SET_SLEEP_TIMER = "com.simplesound.app.SET_SLEEP_TIMER"
         const val ACTION_CANCEL_SLEEP_TIMER = "com.simplesound.app.CANCEL_SLEEP_TIMER"
         const val EXTRA_MINUTES = "minutes"
 
+        /** True while a sleep timer is counting down. */
         private val _sleepTimerActive = MutableStateFlow(false)
-        val sleepTimerActive: StateFlow<Boolean> = _sleepTimerActive
+        val sleepTimerActive: StateFlow<Boolean> = _sleepTimerActive.asStateFlow()
 
+        /** Remaining ms on the active sleep timer (~1s granularity); 0 when inactive. */
         private val _sleepTimerRemainingMs = MutableStateFlow(0L)
-        val sleepTimerRemainingMs: StateFlow<Long> = _sleepTimerRemainingMs
+        val sleepTimerRemainingMs: StateFlow<Long> = _sleepTimerRemainingMs.asStateFlow()
     }
 }

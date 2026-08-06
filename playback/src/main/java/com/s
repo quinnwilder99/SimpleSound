@@ -2,8 +2,8 @@ package com.simplesound.app.playback
 
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.MediaItem
@@ -11,6 +11,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import androidx.core.content.ContextCompat
 import com.simplesound.app.data.model.Track
@@ -26,7 +27,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * The sleep timer state ([sleepTimerActive] / [sleepTimerRemainingMs]) is owned by
  * [PlaybackService] so the countdown keeps running while the app is backgrounded
  * (this controller is torn down in onStop). Set/cancel requests are forwarded to
- * the service via Intent.
+ * the service as custom Media3 session commands over the [MediaController] — the
+ * lifecycle-safe, Android-8+-safe way to reach a MediaSessionService.
  */
 class PlayerController(private val context: Context) {
 
@@ -358,21 +360,33 @@ class PlayerController(private val context: Context) {
     }
 
     /**
-     * Pause playback after [minutes]. Delegates to [PlaybackService] so the timer
-     * keeps running while the app is in the background (this controller is torn
-     * down in onStop). Pass 0 to cancel.
+     * Pause playback after [minutes]. Forwards to [PlaybackService] as a custom
+     * Media3 session command over the [MediaController] connection — the
+     * lifecycle-safe, Android-8+-safe way to reach a MediaSessionService. If the
+     * controller isn't connected yet (its builder is async), the request is
+     * retried shortly after. Pass 0 to cancel.
      */
     fun setSleepTimer(minutes: Int) {
-        val intent = Intent(context, PlaybackService::class.java)
-            .setAction(PlaybackService.ACTION_SET_SLEEP_TIMER)
-            .putExtra(PlaybackService.EXTRA_MINUTES, minutes)
-        context.startService(intent)
+        val args = Bundle().apply { putInt(PlaybackService.KEY_MINUTES, minutes) }
+        sendSleepCommand(PlaybackService.COMMAND_SET_SLEEP_TIMER, args)
     }
 
     fun cancelSleepTimer() {
-        val intent = Intent(context, PlaybackService::class.java)
-            .setAction(PlaybackService.ACTION_CANCEL_SLEEP_TIMER)
-        context.startService(intent)
+        sendSleepCommand(PlaybackService.COMMAND_CANCEL_SLEEP_TIMER, Bundle.EMPTY)
+    }
+
+    private fun sendSleepCommand(action: String, args: Bundle) {
+        val c = controller
+        if (c != null) {
+            c.sendCustomCommand(SessionCommand(action, args), null)
+            return
+        }
+        // Controller not connected yet (MediaController.Builder is async). Retry
+        // once shortly after — by then connect()'s future will usually be done.
+        mainHandler.postDelayed({
+            val cc = controller
+            if (cc != null) cc.sendCustomCommand(SessionCommand(action, args), null)
+        }, 500L)
     }
 
     private fun updateProgressPolling() {
@@ -398,11 +412,5 @@ class PlayerController(private val context: Context) {
         if (c.mediaItemCount > 0 || _currentTrack.value != null) return
         val pos = _positionMs.value.takeIf { it >= 0L } ?: -1L
         prepareRestoredTrack(track, pos)
-    }
-
-    companion object {
-        const val ACTION_SET_SLEEP_TIMER = "com.simplesound.app.SET_SLEEP_TIMER"
-        const val ACTION_CANCEL_SLEEP_TIMER = "com.simplesound.app.CANCEL_SLEEP_TIMER"
-        const val EXTRA_MINUTES = "minutes"
     }
 }
