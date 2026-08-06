@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material3.Button
@@ -22,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.ui.LocalPlayer
@@ -51,6 +55,10 @@ fun SleepTimerScreen(onBack: () -> Unit) {
     val player = LocalPlayer.current
     val active by player.sleepTimerActive.collectAsStateWithLifecycle()
     var selectedMinutes by remember { mutableStateOf(15) }
+    // Custom duration input state (minutes, as a raw string to allow editing)
+    var customMinutesText by remember { mutableStateOf("") }
+    val customMinutes = customMinutesText.toIntOrNull()
+    val customActive = customMinutes != null && customMinutes > 0 && customMinutes == selectedMinutes
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -139,6 +147,52 @@ fun SleepTimerScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.size(24.dp))
 
+            Text(
+                text = "Or set a custom duration",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.size(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = customMinutesText,
+                    onValueChange = { input ->
+                        // Keep only digits, cap length to a sane max (e.g. 720 minutes / 12h)
+                        val digits = input.filter { it.isDigit() }.take(3)
+                        customMinutesText = digits
+                        digits.toIntOrNull()?.let { v ->
+                            if (v in 1..720) selectedMinutes = v
+                        }
+                    },
+                    label = { Text("Minutes") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.width(120.dp)
+                )
+                Text(
+                    text = "min",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (customMinutesText.isNotEmpty() && (customMinutes == null || customMinutes <= 0 || customMinutes > 720)) {
+                Spacer(Modifier.size(6.dp))
+                Text(
+                    text = "Enter a value between 1 and 720.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
+            Spacer(Modifier.size(24.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -149,6 +203,7 @@ fun SleepTimerScreen(onBack: () -> Unit) {
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
+                    enabled = selectedMinutes > 0,
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(text = "Start timer", fontWeight = FontWeight.SemiBold)
