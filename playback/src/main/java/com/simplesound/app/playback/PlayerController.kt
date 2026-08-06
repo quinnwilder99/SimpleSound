@@ -172,6 +172,14 @@ class PlayerController(private val context: Context) {
     private val _sleepTimerActive = MutableStateFlow(false)
     val sleepTimerActive: StateFlow<Boolean> = _sleepTimerActive.asStateFlow()
 
+    /**
+     * Remaining milliseconds on the active sleep timer. Ticks down roughly every
+     * second while a timer is running; 0 when no timer is active. UI uses this to
+     * render a countdown clock.
+     */
+    private val _sleepTimerRemainingMs = MutableStateFlow(0L)
+    val sleepTimerRemainingMs: StateFlow<Long> = _sleepTimerRemainingMs.asStateFlow()
+
     // ---- Progress / timeline ----
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
@@ -191,6 +199,8 @@ class PlayerController(private val context: Context) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var sleepRunnable: Runnable? = null
+    private var sleepTicker: Runnable? = null
+    private var sleepEndAtMs: Long = 0L
     private var progressRunnable: Runnable? = null
 
     private val listener = object : Player.Listener {
@@ -264,6 +274,10 @@ class PlayerController(private val context: Context) {
     fun release() {
         progressRunnable?.let { mainHandler.removeCallbacks(it) }
         progressRunnable = null
+        sleepTicker?.let { mainHandler.removeCallbacks(it) }
+        sleepTicker = null
+        sleepRunnable?.let { mainHandler.removeCallbacks(it) }
+        sleepRunnable = null
         controller?.removeListener(listener)
         controller?.release()
         controller = null
@@ -443,25 +457,49 @@ class PlayerController(private val context: Context) {
     /**
      * Pause playback after [minutes]. Only one sleep timer is active at a time;
      * setting a new one cancels the previous. Pass 0 (or call [cancelSleepTimer])
-     * to cancel.
+     * to cancel. While running, [sleepTimerRemainingMs] ticks down every second
+     * so the UI can render a countdown clock.
      */
     fun setSleepTimer(minutes: Int) {
         cancelSleepTimer()
         if (minutes <= 0) return
+        val totalMs = minutes * 60_000L
         _sleepTimerActive.value = true
+        _sleepTimerRemainingMs.value = totalMs
+        sleepEndAtMs = System.currentTimeMillis() + totalMs
+
+        // Final fire: pause playback once the duration elapses.
         val r = Runnable {
             controller?.pause()
             _sleepTimerActive.value = false
+            _sleepTimerRemainingMs.value = 0L
             sleepRunnable = null
+            sleepTicker?.let { mainHandler.removeCallbacks(it) }
+            sleepTicker = null
         }
         sleepRunnable = r
-        mainHandler.postDelayed(r, minutes * 60_000L)
+        mainHandler.postDelayed(r, totalMs)
+
+        // Ticker: update remaining time roughly every second for the countdown UI.
+        val t = object : Runnable {
+            override fun run() {
+                val remaining = sleepEndAtMs - System.currentTimeMillis()
+                _sleepTimerRemainingMs.value = remaining.coerceAtLeast(0L)
+                if (!_sleepTimerActive.value) return
+                mainHandler.postDelayed(this, 1_000L)
+            }
+        }
+        sleepTicker = t
+        mainHandler.post(t)
     }
 
     fun cancelSleepTimer() {
         sleepRunnable?.let { mainHandler.removeCallbacks(it) }
         sleepRunnable = null
+        sleepTicker?.let { mainHandler.removeCallbacks(it) }
+        sleepTicker = null
         _sleepTimerActive.value = false
+        _sleepTimerRemainingMs.value = 0L
     }
 
     /**
