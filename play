@@ -1,369 +1,197 @@
 package com.simplesound.app.playback
 
-import android.content.ComponentName
-import android.content.Context
-import android.net.Uri
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.PlaybackParameters
+import android.os.SystemClock
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.Player
-import androidx.media3.session.MediaController
-import androidx.media3.session.SessionToken
-import androidx.core.content.ContextCompat
-import com.simplesound.app.data.model.Track
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Thin bridge between Compose and the [PlaybackService]'s MediaController. Exposes
- * the currently playing track and play/pause state as observable flows, and simple
- * transport controls. Safe to construct once at the Activity level.
+ * Foreground media service that owns the ExoPlayer instance and exposes it as a
+ * [MediaSession]. The UI talks to it through a MediaController (see
+ * [PlayerController]), which gives us system media notifications, lock-screen
+ * controls and background playback for free.
+ *
+ * This service also owns the **sleep timer** so that the countdown keeps running
+ * (and the pause fires) while the app is in the background. The Activity-owned
+ * [PlayerController] is torn down in onStop(); the service is not, so the timer
+ * must live here. The active/remaining state is published via companion-object
+ * StateFlows so the UI can observe it from any component, and the deadline is
+ * persisted to SharedPreferences so it survives service recreation.
+ *
+ * Set/cancel requests arrive as plain [Intent]s via [onStartCommand]. This is
+ * safe because the user always starts/cancels the timer while the app is in the
+ * foreground (Android 8+ disallows background startService, which we don't need).
  */
-class PlayerController(private val context: Context) {
+class PlaybackService : MediaSessionService() {
 
-    private var controller: MediaController? = null
-    private val trackIndex = mutableMapOf<String, Track>()
+    private var mediaSession: MediaSession? = null
+    private lateinit var player: Player
 
-    private val _queue = MutableStateFlow<List<Track>>(emptyList())
-    val queue: StateFlow<List<Track>> = _queue.asStateFlow()
+    private val sleepHandler = Handler(Looper.getMainLooper())
+    private var sleepRunnable: Runnable? = null
+    private var sleepTicker: Runnable? = null
+    private var sleepEndElapsed: Long = 0L
 
-    private val _queueTitle = MutableStateFlow("")
-    val queueTitle: StateFlow<String> = _queueTitle.asStateFlow()
+    private val ticker = object : Runnable {
+        override fun run() {
+            val remaining = sleepEndElapsed - SystemClock.elapsedRealtime()
+            if (remaining <= 0L) {
+                _sleepTimerRemainingMs.value = 0L
+                fireSleepTimer()
+                return
+            }
+            _sleepTimerRemainingMs.value = remaining
+            sleepHandler.postDelayed(this, 1_000L)
+        }
+    }
 
-    private val _queueIndex = MutableStateFlow(-1)
-    val queueIndex: StateFlow<Int> = _queueIndex.asStateFlow()
+    private val sleepPrefs by lazy {
+        getSharedPreferences(SLEEP_PREFS, android.content.Context.MODE_PRIVATE)
+    }
 
-    private val _currentTrack = MutableStateFlow<Track?>(null)
-    val currentTrack: StateFlow<Track?> = _currentTrack.asStateFlow()
+    override fun onCreate() {
+        super.onCreate()
+        player = ExoPlayer.Builder(this)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                /* handleAudioFocus = */ true
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .build()
 
-    private val _lastPlayedTrack = MutableStateFlow<Track?>(null)
-    val lastPlayedTrack: StateFlow<Track?> = _lastPlayedTrack.asStateFlow()
+        mediaSession = MediaSession.Builder(this, player).build()
+
+        // Resume a sleep timer that was active before the service was recreated.
+        restoreSleepTimerIfNeeded()
+    }
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     /**
-     * Restore the last played track from persistence (e.g. after app restart).
-     * Only seeds the value if no track is currently set, so it never clobbers a
-     * live session. Also seeds the persisted [positionMs] and [durationMs] so the
-     * mini player / Now Playing screen show the correct timeline immediately.
-     *
-     * Pass [autoPrepareAndPause] = true (default) to also load the track into the
-     * Media3 controller in a paused state so a subsequent tap on Play can resume
-     * from [positionMs] without having to reselect the track.
+     * Handles sleep-timer set/cancel requests. The MediaSessionService base class
+     * uses onStartCommand for its own lifecycle, so we intercept our custom
+     * actions here and defer everything else to super (which manages the
+     * controller binding). Returning [START_STICKY] keeps the service alive.
      */
-    fun restoreLastPlayedTrack(
-        track: Track?,
-        positionMs: Long = -1L,
-        autoPrepareAndPause: Boolean = true
-    ) {
-        if (track == null) return
-        if (_lastPlayedTrack.value == null) {
-            _lastPlayedTrack.value = track
-            if (positionMs >= 0L) _positionMs.value = positionMs
-            if (_durationMs.value <= 0L && track.durationMs > 0L) {
-                _durationMs.value = track.durationMs
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_SET_SLEEP_TIMER -> {
+                val minutes = intent.getIntExtra(EXTRA_MINUTES, 0)
+                setSleepTimer(minutes)
             }
+            ACTION_CANCEL_SLEEP_TIMER -> cancelSleepTimer()
         }
-        if (autoPrepareAndPause) prepareRestoredTrack(track, positionMs)
+        return super.onStartCommand(intent, flags, startId)
     }
 
-    private val _isPlaying = MutableStateFlow(false)
-    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+    /**
+     * Pause playback after [minutes]. Only one sleep timer is active at a time.
+     * Uses [SystemClock.elapsedRealtime] (monotonic) and a self-correcting ticker
+     * keyed off the fixed end time. The deadline is persisted so the timer
+     * survives service recreation.
+     */
+    fun setSleepTimer(minutes: Int) {
+        cancelSleepTimerInternal()
+        if (minutes <= 0) return
+        val totalMs = minutes * 60_000L
+        _sleepTimerActive.value = true
+        _sleepTimerRemainingMs.value = totalMs
+        sleepEndElapsed = SystemClock.elapsedRealtime() + totalMs
+        sleepPrefs.edit().putLong(KEY_DEADLINE_ELAPSED, sleepEndElapsed).apply()
 
-    private val _playbackSpeed = MutableStateFlow(1.0f)
-    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+        sleepTicker = ticker
+        sleepHandler.post(ticker)
 
-    private val _sleepTimerActive = MutableStateFlow(false)
-    val sleepTimerActive: StateFlow<Boolean> = _sleepTimerActive.asStateFlow()
-
-    private val _positionMs = MutableStateFlow(0L)
-    val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
-
-    private val _durationMs = MutableStateFlow(0L)
-    val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
-
-    private val _isShuffleOn = MutableStateFlow(false)
-    val isShuffleOn: StateFlow<Boolean> = _isShuffleOn.asStateFlow()
-
-    private val _repeatMode = MutableStateFlow(0)
-    val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
-
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var sleepRunnable: Runnable? = null
-    private var progressRunnable: Runnable? = null
-
-    private val listener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            _isPlaying.value = isPlaying
-            updateProgressPolling()
-        }
-
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            val id = mediaItem?.mediaId
-            if (id != null) {
-                _currentTrack.value = trackIndex[id]
-                _lastPlayedTrack.value = trackIndex[id]
-            }
-            _queueIndex.value = controller?.currentMediaItemIndex ?: -1
-            _positionMs.value = 0L
-            _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
-        }
-
-        override fun onPlaybackStateChanged(state: Int) {
-            if (state == Player.STATE_READY || state == Player.STATE_ENDED) {
-                _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
-            }
-        }
-
-        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
-            _isShuffleOn.value = shuffleModeEnabled
-        }
-
-        override fun onRepeatModeChanged(repeatMode: Int) {
-            _repeatMode.value = when (repeatMode) {
-                Player.REPEAT_MODE_ONE -> 2
-                Player.REPEAT_MODE_ALL -> 1
-                else -> 0
-            }
-        }
+        val r = Runnable { fireSleepTimer() }
+        sleepRunnable = r
+        sleepHandler.postDelayed(r, totalMs)
     }
 
-    fun connect() {
-        if (controller != null) return
-        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
-        future.addListener({
-            val c = runCatching { future.get() }.getOrNull() ?: return@addListener
-            controller = c.also { it.addListener(listener) }
-            _isShuffleOn.value = controller?.shuffleModeEnabled == true
-            _repeatMode.value = when (controller?.repeatMode) {
-                Player.REPEAT_MODE_ONE -> 2
-                Player.REPEAT_MODE_ALL -> 1
-                else -> 0
-            }
-            _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
-            updateProgressPolling()
-            maybePrepareRestoredTrack()
-        }, ContextCompat.getMainExecutor(context))
+    private fun fireSleepTimer() {
+        if (!_sleepTimerActive.value) return
+        player.pause()
+        _sleepTimerActive.value = false
+        _sleepTimerRemainingMs.value = 0L
+        sleepRunnable?.let { sleepHandler.removeCallbacks(it) }
+        sleepRunnable = null
+        sleepTicker?.let { sleepHandler.removeCallbacks(it) }
+        sleepTicker = null
+        sleepPrefs.edit().remove(KEY_DEADLINE_ELAPSED).apply()
     }
 
-    fun release() {
-        progressRunnable?.let { mainHandler.removeCallbacks(it) }
-        progressRunnable = null
-        controller?.removeListener(listener)
-        controller?.release()
-        controller = null
+    fun cancelSleepTimer() = cancelSleepTimerInternal()
+
+    private fun cancelSleepTimerInternal() {
+        sleepRunnable?.let { sleepHandler.removeCallbacks(it) }
+        sleepRunnable = null
+        sleepTicker?.let { sleepHandler.removeCallbacks(it) }
+        sleepTicker = null
+        _sleepTimerActive.value = false
+        _sleepTimerRemainingMs.value = 0L
+        sleepPrefs.edit().remove(KEY_DEADLINE_ELAPSED).apply()
     }
 
-    fun playQueue(tracks: List<Track>, startIndex: Int = 0, sourceTitle: String = "") {
-        val c = controller ?: return
-        if (tracks.isEmpty()) return
-        trackIndex.clear()
-        val items = tracks.map { track ->
-            trackIndex[track.id.toString()] = track
-            MediaItem.Builder()
-                .setMediaId(track.id.toString())
-                .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(track.title)
-                        .setArtist(track.artistOrUnknown)
-                        .setAlbumTitle(track.albumOrUnknown)
-                        .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
-                        .build()
-                )
-                .build()
-        }
-        val safeIndex = startIndex.coerceIn(0, items.lastIndex)
-        c.setMediaItems(items, safeIndex, 0L)
-        c.prepare()
-        c.play()
-        _queue.value = tracks
-        _queueTitle.value = sourceTitle
-        _queueIndex.value = safeIndex
-        _currentTrack.value = tracks[safeIndex]
-        _lastPlayedTrack.value = tracks[safeIndex]
-    }
-
-    fun playSingle(track: Track) = playQueue(listOf(track), 0, "Queue")
-
-    fun togglePlayPause() {
-        val c = controller ?: return
-        if (c.mediaItemCount == 0) {
-            maybePrepareRestoredTrack()
-            c.play()
+    private fun restoreSleepTimerIfNeeded() {
+        val end = sleepPrefs.getLong(KEY_DEADLINE_ELAPSED, 0L)
+        if (end <= 0L) return
+        val remaining = end - SystemClock.elapsedRealtime()
+        if (remaining <= 1_000L) {
+            sleepPrefs.edit().remove(KEY_DEADLINE_ELAPSED).apply()
             return
         }
-        if (c.isPlaying) c.pause() else c.play()
-    }
-
-    fun next() { controller?.seekToNextMediaItem() }
-    fun previous() { controller?.seekToPreviousMediaItem() }
-
-    fun stop() {
-        val c = controller ?: return
-        _currentTrack.value = null
-        _queueIndex.value = -1
-        c.stop()
-    }
-
-    fun playQueueItemAt(index: Int) {
-        val c = controller ?: return
-        val q = _queue.value
-        if (index !in q.indices) return
-        c.seekToDefaultPosition(index)
-        _queueIndex.value = index
-        _currentTrack.value = q[index]
-        c.play()
-    }
-
-    fun moveQueueItem(from: Int, to: Int) {
-        val c = controller
-        val q = _queue.value.toMutableList()
-        if (from !in q.indices || to !in q.indices) return
-        val item = q.removeAt(from)
-        q.add(to, item)
-        _queue.value = q
-        val currentTrackId = _currentTrack.value?.id
-        trackIndex.clear()
-        val items = q.map { track ->
-            trackIndex[track.id.toString()] = track
-            MediaItem.Builder()
-                .setMediaId(track.id.toString())
-                .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(track.title)
-                        .setArtist(track.artistOrUnknown)
-                        .setAlbumTitle(track.albumOrUnknown)
-                        .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
-                        .build()
-                )
-                .build()
-        }
-        if (c != null) {
-            val newIndex = q.indexOfFirst { it.id == currentTrackId }.takeIf { it >= 0 } ?: 0
-            val pos = c.currentPosition.coerceAtLeast(0)
-            c.setMediaItems(items, newIndex, pos)
-            _queueIndex.value = newIndex
-        }
-    }
-
-    fun removeQueueItem(index: Int) {
-        val c = controller
-        val q = _queue.value.toMutableList()
-        if (index !in q.indices) return
-        val removed = q.removeAt(index)
-        _queue.value = q
-        trackIndex.remove(removed.id.toString())
-        if (c != null) {
-            c.removeMediaItem(index)
-            if (q.isEmpty()) {
-                _queueIndex.value = -1
-                _currentTrack.value = null
-                c.stop()
-            } else {
-                _queueIndex.value = c.currentMediaItemIndex
-                val mid = c.currentMediaItem?.mediaId
-                _currentTrack.value = if (mid != null) trackIndex[mid] else _currentTrack.value
-            }
-        }
-    }
-
-    fun seekTo(positionMs: Long) {
-        controller?.seekTo(positionMs.coerceAtLeast(0))
-        _positionMs.value = positionMs.coerceAtLeast(0)
-    }
-
-    fun toggleShuffle() {
-        val c = controller ?: return
-        c.shuffleModeEnabled = !c.shuffleModeEnabled
-    }
-
-    fun cycleRepeatMode() {
-        val c = controller ?: return
-        c.repeatMode = when (c.repeatMode) {
-            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-            else -> Player.REPEAT_MODE_OFF
-        }
-    }
-
-    fun setSpeed(speed: Float) {
-        val s = speed.coerceIn(0.1f, 2.0f)
-        _playbackSpeed.value = s
-        controller?.playbackParameters = PlaybackParameters(s, 1.0f)
-    }
-
-    fun setSleepTimer(minutes: Int) {
-        cancelSleepTimer()
-        if (minutes <= 0) return
+        sleepEndElapsed = end
         _sleepTimerActive.value = true
-        val r = Runnable {
-            controller?.pause()
-            _sleepTimerActive.value = false
-            sleepRunnable = null
-        }
+        _sleepTimerRemainingMs.value = remaining
+        sleepTicker = ticker
+        sleepHandler.post(ticker)
+        val r = Runnable { fireSleepTimer() }
         sleepRunnable = r
-        mainHandler.postDelayed(r, minutes * 60_000L)
+        sleepHandler.postDelayed(r, remaining)
     }
 
-    fun cancelSleepTimer() {
-        sleepRunnable?.let { mainHandler.removeCallbacks(it) }
-        sleepRunnable = null
-        _sleepTimerActive.value = false
-    }
-
-    private fun updateProgressPolling() {
-        progressRunnable?.let { mainHandler.removeCallbacks(it) }
-        if (_isPlaying.value) {
-            val r = object : Runnable {
-                override fun run() {
-                    val c = controller ?: return
-                    _positionMs.value = c.currentPosition.coerceAtLeast(0)
-                    val d = c.duration
-                    if (d > 0) _durationMs.value = d
-                    mainHandler.postDelayed(this, 500L)
-                }
-            }
-            progressRunnable = r
-            mainHandler.post(r)
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        if (!player.playWhenReady) {
+            player.stop()
+            cancelSleepTimerInternal()
+            stopSelf()
         }
     }
 
-    private fun prepareRestoredTrack(track: Track, positionMs: Long = -1L) {
-        val c = controller ?: return
-        if (c.mediaItemCount > 0) return
-        if (_currentTrack.value != null) return
-        trackIndex.clear()
-        trackIndex[track.id.toString()] = track
-        val item = MediaItem.Builder()
-            .setMediaId(track.id.toString())
-            .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(track.title)
-                    .setArtist(track.artistOrUnknown)
-                    .setAlbumTitle(track.albumOrUnknown)
-                    .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
-                    .build()
-            )
-            .build()
-        val startMs = if (positionMs >= 0L) positionMs else 0L
-        c.setMediaItem(item, startMs)
-        c.prepare()
-        c.playWhenReady = false
-        _queue.value = listOf(track)
-        _queueTitle.value = "Last played"
-        _queueIndex.value = 0
+    override fun onDestroy() {
+        mediaSession?.run {
+            player.release()
+            release()
+        }
+        mediaSession = null
+        super.onDestroy()
     }
 
-    private fun maybePrepareRestoredTrack() {
-        val track = _lastPlayedTrack.value ?: return
-        val c = controller ?: return
-        if (c.mediaItemCount > 0 || _currentTrack.value != null) return
-        val pos = _positionMs.value.takeIf { it >= 0L } ?: -1L
-        prepareRestoredTrack(track, pos)
+    companion object {
+        private const val SLEEP_PREFS = "simplesound_sleep_timer"
+        private const val KEY_DEADLINE_ELAPSED = "deadline_elapsed"
+
+        const val ACTION_SET_SLEEP_TIMER = "com.simplesound.app.SET_SLEEP_TIMER"
+        const val ACTION_CANCEL_SLEEP_TIMER = "com.simplesound.app.CANCEL_SLEEP_TIMER"
+        const val EXTRA_MINUTES = "minutes"
+
+        /** True while a sleep timer is counting down. */
+        private val _sleepTimerActive = MutableStateFlow(false)
+        val sleepTimerActive: StateFlow<Boolean> = _sleepTimerActive
+
+        /** Remaining ms on the active sleep timer (~1s granularity); 0 when inactive. */
+        private val _sleepTimerRemainingMs = MutableStateFlow(0L)
+        val sleepTimerRemainingMs: StateFlow<Long> = _sleepTimerRemainingMs
     }
 }
