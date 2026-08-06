@@ -2,7 +2,6 @@ package com.simplesound.app.ui.screens.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,10 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,11 +31,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.core.theme.AccentColor
 import com.simplesound.app.ui.theme.color
+import com.simplesound.app.ui.theme.gradient
 import com.simplesound.app.ui.theme.label
 
 /**
  * Accent color picker sub-page of Settings. Lets the user choose the app's
- * highlight color from the preset palette.
+ * highlight color from the preset palette. Swatches are laid out in a grid
+ * with 5 choices per row.
  */
 @Composable
 fun AccentColorScreen(vm: AppViewModel, onBack: () -> Unit) {
@@ -54,7 +54,7 @@ fun AccentColorScreen(vm: AppViewModel, onBack: () -> Unit) {
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
-                        Icons.Rounded.ArrowBack,
+                        Icons.AutoMirrored.Rounded.ArrowBack,
                         "Back",
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -80,19 +80,26 @@ fun AccentColorScreen(vm: AppViewModel, onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.size(20.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // 5 swatches per row; as many rows as needed (e.g. 5 + 5 + 3).
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                AccentColor.entries.forEach { color ->
-                    AccentSwatch(
-                        color = color,
-                        selected = color == accent,
-                        onClick = { vm.setAccent(color) }
-                    )
+                AccentColor.entries.chunked(5).forEach { rowColors ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        rowColors.forEach { color ->
+                            AccentSwatch(
+                                color = color,
+                                selected = color == accent,
+                                onClick = { vm.setAccent(color) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -103,9 +110,11 @@ fun AccentColorScreen(vm: AppViewModel, onBack: () -> Unit) {
 private fun AccentSwatch(
     color: AccentColor,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -113,7 +122,10 @@ private fun AccentSwatch(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(color.color)
+                .then(
+                    color.gradient?.let { Modifier.background(it) }
+                        ?: Modifier.background(color.color)
+                )
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
