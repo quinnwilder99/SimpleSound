@@ -58,6 +58,7 @@ import com.simplesound.app.ui.components.RemoveTracksDialog
 import com.simplesound.app.ui.components.SortHeader
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
+import com.simplesound.app.ui.components.liquidGlass
 import com.simplesound.app.util.trackCountLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -178,11 +179,15 @@ fun PlaylistDetailScreen(
             ) {
                 item {
                     Column(
-                        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .liquidGlass(corner = 28.dp, bodyAlpha = 0.09f)
+                            .padding(vertical = 18.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Artwork(uri = playlist.coverUri, modifier = Modifier.size(170.dp), corner = 20.dp, iconSize = 64.dp)
-                        Spacer(Modifier.size(12.dp))
+                        Spacer(Modifier.size(14.dp))
                         Text(
                             playlist.name,
                             style = MaterialTheme.typography.headlineMedium,

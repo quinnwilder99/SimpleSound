@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.simplesound.app.ui.components.liquidGlass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -66,8 +66,6 @@ fun PlaylistsScreen(vm: AppViewModel, navController: NavHostController) {
         item { Spacer(Modifier.size(16.dp)) }
         items(userPlaylists, key = { it.id }) { pl ->
             UserPlaylistRow(pl) { navController.navigate(Routes.playlist(pl.id)) }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline, thickness = 0.5.dp,
-                modifier = Modifier.padding(start = 92.dp))
         }
     }
 }
@@ -75,10 +73,14 @@ fun PlaylistsScreen(vm: AppViewModel, navController: NavHostController) {
 @Composable
 private fun NativePlaylistCard(playlist: Playlist, onClick: () -> Unit) {
     Column(
-        modifier = Modifier.width(150.dp).clickable(onClick = onClick),
+        modifier = Modifier
+            .width(150.dp)
+            .liquidGlass(corner = 22.dp, bodyAlpha = 0.07f)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Artwork(uri = playlist.coverUri, modifier = Modifier.size(150.dp), corner = 16.dp, iconSize = 54.dp)
+        Artwork(uri = playlist.coverUri, modifier = Modifier.size(146.dp), corner = 16.dp, iconSize = 54.dp)
         Text(
             playlist.name,
             style = MaterialTheme.typography.titleMedium,
@@ -86,7 +88,7 @@ private fun NativePlaylistCard(playlist: Playlist, onClick: () -> Unit) {
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = 10.dp)
         )
         Text(
             trackCountLabel(playlist.trackCount),
@@ -99,8 +101,12 @@ private fun NativePlaylistCard(playlist: Playlist, onClick: () -> Unit) {
 @Composable
 private fun UserPlaylistRow(playlist: Playlist, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 5.dp)
+            .liquidGlass(corner = 20.dp, bodyAlpha = 0.08f)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Artwork(uri = playlist.coverUri, modifier = Modifier.size(56.dp))
