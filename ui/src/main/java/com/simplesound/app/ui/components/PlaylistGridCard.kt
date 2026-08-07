@@ -7,13 +7,13 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
@@ -37,6 +37,10 @@ import com.simplesound.app.data.model.Playlist
  * A large square playlist card as seen on the Favorites tab. Press-and-hold makes
  * it "shake" (a small continuous wobble) and fires [onLongPress] so the host can
  * present the Play / Add / Share / Remove options.
+ *
+ * The playlist name sits beneath the artwork (the track count is no longer shown),
+ * and each card is wrapped in a liquid-glass surface so the playlists visually
+ * separate from one another.
  */
 @Composable
 fun PlaylistGridCard(
@@ -55,7 +59,17 @@ fun PlaylistGridCard(
         ).value
     } else 0f
 
-    Column(modifier = modifier.padding(8.dp)) {
+    Column(
+        modifier = modifier
+            .padding(8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .liquidGlass(
+                corner = 20.dp,
+                tint = MaterialTheme.colorScheme.primary,
+                bodyAlpha = 0.10f
+            )
+            .padding(10.dp)
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -68,34 +82,17 @@ fun PlaylistGridCard(
                 }
         ) {
             Artwork(uri = playlist.coverUri, modifier = Modifier.fillMaxSize(), corner = 18.dp, iconSize = 48.dp)
-            // Legibility scrim + labels overlaid, like the reference.
+            // Legibility scrim over the artwork.
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             0f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.45f)
+                            1f to Color.Black.copy(alpha = 0.32f)
                         )
                     )
             )
-            Column(Modifier.align(Alignment.Center)) {
-                Text(
-                    "Playlists",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
-                Text(
-                    playlist.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
-            }
             if (playlist.favorited || playlist.kind != com.simplesound.app.data.model.PlaylistKind.USER) {
                 Icon(
                     Icons.Rounded.Favorite,
@@ -105,11 +102,17 @@ fun PlaylistGridCard(
                 )
             }
         }
+        // Playlist name moved under the artwork (replaces the track count).
         Text(
-            text = com.simplesound.app.util.trackCountLabel(playlist.trackCount),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 6.dp, start = 4.dp)
+            text = playlist.name,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, start = 4.dp, end = 4.dp)
         )
     }
 }
