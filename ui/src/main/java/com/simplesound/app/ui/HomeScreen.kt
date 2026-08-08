@@ -19,9 +19,12 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +62,9 @@ import kotlinx.coroutines.launch
 fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
     val tabSettings by vm.tabSettings.collectAsStateWithLifecycle()
     val enabledTabs = remember(tabSettings) { tabSettings.filter { it.enabled }.map { it.tab } }
+
+    // Pending creation of a new playlist from the "+" icon in the header.
+    var showCreatePlaylist by remember { mutableStateOf(false) }
 
     val pagerState = rememberPagerState(pageCount = { enabledTabs.size })
     val scope = rememberCoroutineScope()
@@ -145,7 +151,7 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
                     )
                     Spacer(Modifier.weight(1f))
                     if (selectedTab == Tab.PLAYLISTS) {
-                        IconButton(onClick = { vm.createPlaylist("New playlist") }) {
+                        IconButton(onClick = { showCreatePlaylist = true }) {
                             Icon(Icons.Rounded.Add, "New playlist", tint = MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -213,5 +219,45 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
                 }
             }
         }
+
+        if (showCreatePlaylist) {
+            CreatePlaylistDialog(
+                onConfirm = { name ->
+                    vm.createPlaylist(name)
+                    showCreatePlaylist = false
+                },
+                onDismiss = { showCreatePlaylist = false }
+            )
+        }
     }
+}
+
+/**
+ * Asks the user for a name before creating a new playlist from the "+" icon in
+ * the header. Empty names fall back to "New playlist", matching the repository's
+ * default behavior.
+ */
+@Composable
+private fun CreatePlaylistDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New playlist") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                singleLine = true,
+                label = { Text("Playlist name") }
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(name.trim().ifBlank { "New playlist" }) }) {
+                Text("Create")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

@@ -93,6 +93,7 @@ fun PlaylistDetailScreen(
 
     var menuOpen by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
 
     // ---- Multi-track selection state ----
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
@@ -163,7 +164,7 @@ fun PlaylistDetailScreen(
                                 )
                             })
                             DropdownMenuItem(text = { Text("Delete playlist") }, onClick = {
-                                menuOpen = false; vm.deletePlaylist(playlistId); onBack()
+                                menuOpen = false; deleting = true
                             })
                         }
                     }
@@ -277,6 +278,14 @@ fun PlaylistDetailScreen(
         )
     }
 
+    if (deleting) {
+        DeletePlaylistDialog(
+            name = playlist.name,
+            onConfirm = { vm.deletePlaylist(playlistId); deleting = false; onBack() },
+            onDismiss = { deleting = false }
+        )
+    }
+
     // ---- Multi-track: Add to other playlists ----
     if (showAddMany && selectedIds.isNotEmpty()) {
         AddTracksToPlaylistDialog(
@@ -362,5 +371,21 @@ private fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
+    )
+}
+
+/** Confirmation dialog before permanently deleting a playlist. */
+@Composable
+private fun DeletePlaylistDialog(name: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Delete playlist") },
+        text = { Text("Delete \"$name\" and its tracks from this playlist? This cannot be undone.") }
     )
 }
