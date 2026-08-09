@@ -30,6 +30,10 @@ import androidx.compose.ui.unit.dp
  *  3. A specular diagonal streak — a thin skewed highlight arcing across the
  *     upper third, the detail that reads as wet, specular light.
  *
+ * The lighting cues (body gradient, gloss, streak, rim) are deliberately gentle —
+ * a soft, diffuse glassiness rather than a hard, glossy glare, so the material
+ * reads as quiet frosted glass over the radiant background.
+ *
  * Apply to any container; best over the [GlowBackground] so refraction of the
  * radiant accent shows through.
  *
@@ -46,8 +50,11 @@ fun Modifier.liquidGlass(
     .clip(RoundedCornerShape(corner))
     .drawBehind {
         val accent = if (tint == Color.Unspecified) Color.White else tint
-        val bodyTop = Color.White.copy(alpha = bodyAlpha * 1.6f)
-        val bodyBottom = Color.Black.copy(alpha = bodyAlpha * 1.2f)
+        // Gentle, low-contrast body: a soft top-to-bottom fade rather than a harsh
+        // bright-on-dark gradient. Multipliers kept small so the glass stays
+        // see-through and its sheen reads as diffuse rather than glaring.
+        val bodyTop = Color.White.copy(alpha = bodyAlpha * 1.15f)
+        val bodyBottom = Color.Black.copy(alpha = bodyAlpha * 0.9f)
 
         // 1) Body — vertical sheen of the glass.
         drawRect(
@@ -59,28 +66,30 @@ fun Modifier.liquidGlass(
         )
 
         // 2) Pooled gloss near the top, tinted by the accent so the glass
-        //    refracts the radiant glow behind it.
-        val glossCenter = Offset(x = size.width * 0.5f, y = size.height * 0.18f)
+        //    refracts the radiant glow behind it. Kept soft and wide so it pools
+        //    rather than glaring.
+        val glossCenter = Offset(x = size.width * 0.5f, y = size.height * 0.20f)
         drawRect(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    accent.copy(alpha = bodyAlpha * 1.1f),
+                    accent.copy(alpha = bodyAlpha * 0.8f),
                     Color.Transparent
                 ),
                 center = glossCenter,
-                radius = size.minDimension * 0.9f,
+                radius = size.minDimension * 0.95f,
                 tileMode = TileMode.Clamp
             )
         )
 
-        // 3) Specular diagonal streak across the upper third — the wet highlight.
+        // 3) Specular diagonal streak across the upper third — a soft wet
+        //    highlight rather than a sharp bright line.
         val streakTop = Offset(x = size.width * 0.12f, y = size.height * 0.04f)
         val streakEnd = Offset(x = size.width * 0.78f, y = size.height * 0.34f)
         drawRect(
             brush = Brush.linearGradient(
                 colors = listOf(
                     Color.White.copy(alpha = 0f),
-                    Color.White.copy(alpha = bodyAlpha * 2.2f),
+                    Color.White.copy(alpha = bodyAlpha * 1.30f),
                     Color.White.copy(alpha = 0f)
                 ),
                 start = streakTop,
@@ -90,12 +99,13 @@ fun Modifier.liquidGlass(
         )
     }
     // Soft inner rim via a translucent white hairline border (laid over content).
+    // Lowered top stop so the rim is a faint suggestion, not a bright edge.
     .border(
         width = 0.75.dp,
         brush = Brush.verticalGradient(
             colors = listOf(
-                Color.White.copy(alpha = 0.42f),
-                Color.White.copy(alpha = 0.08f)
+                Color.White.copy(alpha = 0.28f),
+                Color.White.copy(alpha = 0.06f)
             )
         ),
         shape = RoundedCornerShape(corner)

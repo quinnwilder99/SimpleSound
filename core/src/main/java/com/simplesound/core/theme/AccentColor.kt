@@ -9,7 +9,9 @@ package com.simplesound.core.theme
  *
  * The palette includes both vivid tints and neutral solids (black, grey, white) so
  * the user can dial the accent all the way down to a monochrome look. The default
- * [GradientGrey] resolves to a soft grey-to-graphite gradient in the :ui layer.
+ * [Graphite] is a soft solid graphite — a neutral, muted starting point that
+ * keeps the dark UI quiet by default. ([GradientGrey] remains available as a
+ * grey-to-graphite gradient option in the picker.)
  */
 enum class AccentColor {
     GradientGrey,
@@ -27,7 +29,7 @@ enum class AccentColor {
     Sand;
 
     companion object {
-        val Default = GradientGrey
+        val Default = Graphite
         fun fromName(name: String?): AccentColor =
             entries.firstOrNull { it.name == name } ?: Default
     }
