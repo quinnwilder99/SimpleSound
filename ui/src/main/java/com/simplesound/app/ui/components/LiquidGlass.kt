@@ -23,16 +23,15 @@ import androidx.compose.ui.unit.dp
  * Glass material. Pure-Compose implementation (no RenderEffect blur required)
  * drawn in [drawBehind]:
  *
- *  1. A vertical body gradient: bright translucent white at the top fading to a
- *     deep, dim translucent grey at the bottom — the hallmark sheen of glass.
+ *  1. A vertical body gradient: a soft, smooth white→grey→dark fade top to
+ *     bottom — the quiet sheen of glass, blended across three stops so it
+ *     reads as a diffuse, even wash rather than a stripey highlight.
  *  2. A soft accent-tinted radial "gloss" pooled near the top edge, so the glass
  *     catches the radiant glow behind it.
- *  3. A specular diagonal streak — a thin skewed highlight arcing across the
- *     upper third, the detail that reads as wet, specular light.
+ *  3. A faint inner rim border.
  *
- * The lighting cues (body gradient, gloss, streak, rim) are deliberately gentle —
- * a soft, diffuse glassiness rather than a hard, glossy glare, so the material
- * reads as quiet frosted glass over the radiant background.
+ * There is deliberately no specular streak / "lightning" highlight — the glass
+ * is smooth and diffuse throughout, so it never catches a hard glare mid-card.
  *
  * Apply to any container; best over the [GlowBackground] so refraction of the
  * radiant accent shows through.
@@ -50,16 +49,17 @@ fun Modifier.liquidGlass(
     .clip(RoundedCornerShape(corner))
     .drawBehind {
         val accent = if (tint == Color.Unspecified) Color.White else tint
-        // Gentle, low-contrast body: a soft top-to-bottom fade rather than a harsh
-        // bright-on-dark gradient. Multipliers kept small so the glass stays
-        // see-through and its sheen reads as diffuse rather than glaring.
+        // Gentle, low-contrast body. A smooth three-stop fade (bright top → mid
+        // neutral → dim bottom) keeps the glass even and diffuse, with no hard
+        // band of light in the middle.
         val bodyTop = Color.White.copy(alpha = bodyAlpha * 1.15f)
+        val bodyMid = Color.White.copy(alpha = bodyAlpha * 0.45f)
         val bodyBottom = Color.Black.copy(alpha = bodyAlpha * 0.9f)
 
-        // 1) Body — vertical sheen of the glass.
+        // 1) Body — smooth vertical sheen of the glass.
         drawRect(
             brush = Brush.verticalGradient(
-                colors = listOf(bodyTop, bodyBottom),
+                colors = listOf(bodyTop, bodyMid, bodyBottom),
                 startY = 0f,
                 endY = size.height
             )
@@ -67,7 +67,7 @@ fun Modifier.liquidGlass(
 
         // 2) Pooled gloss near the top, tinted by the accent so the glass
         //    refracts the radiant glow behind it. Kept soft and wide so it pools
-        //    rather than glaring.
+        //    gently near the top edge rather than glaring.
         val glossCenter = Offset(x = size.width * 0.5f, y = size.height * 0.20f)
         drawRect(
             brush = Brush.radialGradient(
@@ -77,23 +77,6 @@ fun Modifier.liquidGlass(
                 ),
                 center = glossCenter,
                 radius = size.minDimension * 0.95f,
-                tileMode = TileMode.Clamp
-            )
-        )
-
-        // 3) Specular diagonal streak across the upper third — a soft wet
-        //    highlight rather than a sharp bright line.
-        val streakTop = Offset(x = size.width * 0.12f, y = size.height * 0.04f)
-        val streakEnd = Offset(x = size.width * 0.78f, y = size.height * 0.34f)
-        drawRect(
-            brush = Brush.linearGradient(
-                colors = listOf(
-                    Color.White.copy(alpha = 0f),
-                    Color.White.copy(alpha = bodyAlpha * 1.30f),
-                    Color.White.copy(alpha = 0f)
-                ),
-                start = streakTop,
-                end = streakEnd,
                 tileMode = TileMode.Clamp
             )
         )

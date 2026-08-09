@@ -49,7 +49,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onManageTabs: () -> Unit,
     onAccentColor: () -> Unit = {},
-    onSleepTimer: () -> Unit = {}
+    onSleepTimer: () -> Unit = {},
+    onAbout: () -> Unit = {}
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -113,12 +114,12 @@ fun SettingsScreen(
                 )
             }
 
-            // ---- About (placeholder, simple) ----
+            // ---- About ----
             item {
                 SettingsRow(
-                    title = "About",
-                    subtitle = "simpleSOUND v0.1.0",
-                    onClick = { /* no-op for now */ }
+                    title = "About simpleSOUND",
+                    subtitle = "Version, credits & more",
+                    onClick = onAbout
                 )
             }
         }

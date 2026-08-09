@@ -22,6 +22,7 @@ import com.simplesound.app.ui.components.MiniPlayer
 import com.simplesound.app.ui.screens.nowplaying.NowPlayingScreen
 import com.simplesound.app.ui.screens.playlistdetail.PlaylistDetailScreen
 import com.simplesound.app.ui.screens.search.SearchScreen
+import com.simplesound.app.ui.screens.settings.AboutScreen
 import com.simplesound.app.ui.screens.settings.AccentColorScreen
 import com.simplesound.app.ui.screens.settings.ManageTabsScreen
 import com.simplesound.app.ui.screens.settings.SettingsScreen
@@ -34,6 +35,7 @@ object Routes {
     const val MANAGE_TABS = "manage_tabs"
     const val ACCENT_COLOR = "accent_color"
     const val SLEEP_TIMER = "sleep_timer"
+    const val ABOUT = "about"
     const val PLAYLIST = "playlist"
     const val NOW_PLAYING = "now_playing"
     const val SEARCH = "search"
@@ -70,7 +72,8 @@ fun SimpleSoundNavHost(
                 onBack = { navController.popBackStack() },
                 onManageTabs = { navController.navigate(Routes.MANAGE_TABS) },
                 onAccentColor = { navController.navigate(Routes.ACCENT_COLOR) },
-                onSleepTimer = { navController.navigate(Routes.SLEEP_TIMER) }
+                onSleepTimer = { navController.navigate(Routes.SLEEP_TIMER) },
+                onAbout = { navController.navigate(Routes.ABOUT) }
             )
         }
         composable(Routes.MANAGE_TABS) {
@@ -81,6 +84,9 @@ fun SimpleSoundNavHost(
         }
         composable(Routes.SLEEP_TIMER) {
             SleepTimerScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.ABOUT) {
+            AboutScreen(onBack = { navController.popBackStack() })
         }
         composable("${Routes.PLAYLIST}/{id}") { entry ->
             val id = entry.arguments?.getString("id").orEmpty()
