@@ -59,10 +59,12 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     // the bar stays visible after stop() clears the current track.
     val display = track ?: lastPlayed ?: return
 
-    // Liquid-glass palette. The surface is a frosted translucent layer that lets
-    // the true-black background bleed through; a top-down specular gradient adds
-    // the "wet" highlight that defines the glass look. Colors are tuned for the
-    // dark-only theme.
+    // Liquid-glass palette. The surface is a frosted translucent layer; a
+    // top-down specular gradient adds the "wet" highlight that defines the glass
+    // look. Colors are tuned for the dark-only theme. The body alpha is kept
+    // high so the bar is effectively opaque — content behind it is fully
+    // obscured, giving the glass a solid frosted backing rather than a
+    // see-through film.
     val glassTint = Color(0xFF1A1C20)
     val glassHighlight = Color.White.copy(alpha = 0.18f)
     val glassEdge = Color.White.copy(alpha = 0.22f)
@@ -76,7 +78,7 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
             .fillMaxWidth()
             .padding(horizontal = 10.dp)
             .clip(RoundedCornerShape(28.dp))
-            .background(glassTint.copy(alpha = 0.55f))
+            .background(glassTint.copy(alpha = 1.0f))
             // Specular top highlight: a thin bright band along the upper rim
             // that sells the "liquid" sheen, fading to transparent at mid-height.
             .drawBehind {
