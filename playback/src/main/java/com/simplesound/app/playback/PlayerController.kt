@@ -161,14 +161,7 @@ class PlayerController(private val context: Context) {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            val id = mediaItem?.mediaId
-            if (id != null) {
-                _currentTrack.value = trackIndex[id]
-                _lastPlayedTrack.value = trackIndex[id]
-            }
-            _queueIndex.value = controller?.currentMediaItemIndex ?: -1
-            _positionMs.value = 0L
-            _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
+            syncCurrentItem()
         }
 
         override fun onPlaybackStateChanged(state: Int) {
@@ -384,12 +377,45 @@ class PlayerController(private val context: Context) {
                     _positionMs.value = c.currentPosition.coerceAtLeast(0)
                     val d = c.duration
                     if (d > 0) _durationMs.value = d
+                    // Belt-and-suspenders: if a track transition (e.g. an automatic
+                    // end-of-track advance) somehow left the displayed track out of
+                    // sync with the player, self-heal within one tick instead of
+                    // staying stuck on the old title.
+                    val id = c.currentMediaItem?.mediaId
+                    if (id != null && _currentTrack.value?.id?.toString() != id) {
+                        trackIndex[id]?.let { resolved ->
+                            _currentTrack.value = resolved
+                            _lastPlayedTrack.value = resolved
+                            _queueIndex.value = c.currentMediaItemIndex
+                        }
+                    }
                     mainHandler.postDelayed(this, 500L)
                 }
             }
             progressRunnable = r
             mainHandler.post(r)
         }
+    }
+
+    /**
+     * Reconcile the displayed track, queue index, and timeline from the live
+     * [controller] state. Reads directly from the controller rather than trusting
+     * a listener callback's own parameters (e.g. [Player.Listener.onMediaItemTransition]'s
+     * `mediaItem` argument), since those can be null or lag behind on an automatic
+     * end-of-track advance — which previously left the timeline reset to 00:00
+     * while the title/artist stayed on the just-finished track.
+     */
+    private fun syncCurrentItem() {
+        val c = controller ?: return
+        val id = c.currentMediaItem?.mediaId
+        val resolved = id?.let { trackIndex[it] }
+        if (resolved != null) {
+            _currentTrack.value = resolved
+            _lastPlayedTrack.value = resolved
+        }
+        _queueIndex.value = c.currentMediaItemIndex
+        _positionMs.value = c.currentPosition.coerceAtLeast(0)
+        _durationMs.value = c.duration.takeIf { it > 0 } ?: 0L
     }
 
     private fun maybePrepareRestoredTrack() {
