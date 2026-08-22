@@ -315,6 +315,14 @@ object MusicRepository {
      * Move [trackId] one slot [up] within the saved custom order for [playlistId].
      * If no custom order exists yet, seeds it from [currentOrder] (the playlist's
      * current track id sequence) so the first reorder has something to work with.
+     *
+     * The saved order is also reconciled against [currentOrder] on every move:
+     * ids no longer in the playlist are dropped, and ids that are in the playlist
+     * but missing from the saved order (e.g. tracks added after the order was
+     * first saved) are appended. Without this, moving one of those newer tracks
+     * would silently no-op forever, since it could never be found in the stale
+     * saved order — which is what made reordering appear to stop working once a
+     * playlist grew past its original custom-order snapshot.
      */
     fun moveTrackInCustomOrder(
         playlistId: String,
@@ -322,7 +330,10 @@ object MusicRepository {
         up: Boolean,
         currentOrder: List<Long>
     ) {
-        val base = customOrderFor(playlistId).ifEmpty { currentOrder }
+        val saved = customOrderFor(playlistId)
+        val currentSet = currentOrder.toHashSet()
+        val reconciled = saved.filter { it in currentSet } + currentOrder.filter { it !in saved }
+        val base = reconciled.ifEmpty { currentOrder }
         val idx = base.indexOf(trackId)
         if (idx < 0) return
         val target = if (up) idx - 1 else idx + 1
