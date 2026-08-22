@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.MediaItem
@@ -32,6 +33,33 @@ class PlayerController(private val context: Context) {
 
     private var controller: MediaController? = null
     private val trackIndex = mutableMapOf<String, Track>()
+
+    /**
+     * Builds the [MediaItem] fed to the [MediaController]/[MediaSession]. The track's
+     * own content URI is stashed in [MediaMetadata.extras] so [TrackArtworkBitmapLoader]
+     * can decode its *embedded* per-track picture for the lock-screen/notification
+     * widget; [Track.albumArtUri] is passed as [MediaMetadata.artworkUri] only as the
+     * album-level fallback when no embedded picture exists (see MediaStoreScanner's
+     * "Artwork strategy" doc comment and ui/Artwork.kt, which follow the same order).
+     */
+    private fun buildMediaItem(track: Track): MediaItem {
+        val extras = Bundle().apply {
+            putString(TrackArtworkBitmapLoader.KEY_TRACK_CONTENT_URI, track.uri)
+        }
+        return MediaItem.Builder()
+            .setMediaId(track.id.toString())
+            .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(track.title)
+                    .setArtist(track.artistOrUnknown)
+                    .setAlbumTitle(track.albumOrUnknown)
+                    .setExtras(extras)
+                    .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
+                    .build()
+            )
+            .build()
+    }
 
     private val _queue = MutableStateFlow<List<Track>>(emptyList())
     val queue: StateFlow<List<Track>> = _queue.asStateFlow()
@@ -89,18 +117,7 @@ class PlayerController(private val context: Context) {
         val c = controller ?: return
         if (c.mediaItemCount > 0) return
         trackIndex[track.id.toString()] = track
-        val item = MediaItem.Builder()
-            .setMediaId(track.id.toString())
-            .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(track.title)
-                    .setArtist(track.artistOrUnknown)
-                    .setAlbumTitle(track.albumOrUnknown)
-                    .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
-                    .build()
-            )
-            .build()
+        val item = buildMediaItem(track)
         c.setMediaItem(item, positionMs.coerceAtLeast(0L))
         c.prepare()
         c.playWhenReady = false
@@ -108,20 +125,7 @@ class PlayerController(private val context: Context) {
 
     private fun prepareRestoredQueue(tracks: List<Track>, startIndex: Int, positionMs: Long) {
         val c = controller ?: return
-        val items = tracks.map { track ->
-            MediaItem.Builder()
-                .setMediaId(track.id.toString())
-                .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(track.title)
-                        .setArtist(track.artistOrUnknown)
-                        .setAlbumTitle(track.albumOrUnknown)
-                        .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
-                        .build()
-                )
-                .build()
-        }
+        val items = tracks.map { track -> buildMediaItem(track) }
         c.setMediaItems(items, startIndex, positionMs.coerceAtLeast(0L))
         c.prepare()
         c.playWhenReady = false
@@ -216,18 +220,7 @@ class PlayerController(private val context: Context) {
         trackIndex.clear()
         val items = tracks.map { track ->
             trackIndex[track.id.toString()] = track
-            MediaItem.Builder()
-                .setMediaId(track.id.toString())
-                .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(track.title)
-                        .setArtist(track.artistOrUnknown)
-                        .setAlbumTitle(track.albumOrUnknown)
-                        .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
-                        .build()
-                )
-                .build()
+            buildMediaItem(track)
         }
         val safeIndex = startIndex.coerceIn(0, items.lastIndex)
         c.setMediaItems(items, safeIndex, 0L)
@@ -283,18 +276,7 @@ class PlayerController(private val context: Context) {
         trackIndex.clear()
         val items = q.map { track ->
             trackIndex[track.id.toString()] = track
-            MediaItem.Builder()
-                .setMediaId(track.id.toString())
-                .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(track.title)
-                        .setArtist(track.artistOrUnknown)
-                        .setAlbumTitle(track.albumOrUnknown)
-                        .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
-                        .build()
-                )
-                .build()
+            buildMediaItem(track)
         }
         if (c != null) {
             val newIndex = q.indexOfFirst { it.id == currentTrackId }.takeIf { it >= 0 } ?: 0

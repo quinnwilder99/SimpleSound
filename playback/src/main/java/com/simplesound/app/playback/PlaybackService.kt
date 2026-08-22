@@ -52,7 +52,9 @@ class PlaybackService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
-        mediaSession = MediaSession.Builder(this, player).build()
+        mediaSession = MediaSession.Builder(this, player)
+            .setBitmapLoader(TrackArtworkBitmapLoader(this))
+            .build()
         restoreSleepTimerIfNeeded()
     }
 
