@@ -75,7 +75,10 @@ private fun NativePlaylistCard(playlist: Playlist, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .width(150.dp)
-            .liquidGlass(corner = 22.dp, bodyAlpha = 0.07f)
+            // Small fixed row (the four native playlists) — keep a rim for
+            // definition but skip the gloss so four cards side by side don't
+            // each throw their own highlight.
+            .liquidGlass(corner = 22.dp, bodyAlpha = 0.07f, showGloss = false)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -104,7 +107,10 @@ private fun UserPlaylistRow(playlist: Playlist, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 5.dp)
-            .liquidGlass(corner = 20.dp, bodyAlpha = 0.08f)
+            // One of these per user playlist, stacked in a LazyColumn — a full
+            // gloss+rim per row would read as a stack of glass tiles rather
+            // than a list. Keep it to a quiet flat wash instead.
+            .liquidGlass(corner = 20.dp, bodyAlpha = 0.05f, showGloss = false, showRim = false)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically

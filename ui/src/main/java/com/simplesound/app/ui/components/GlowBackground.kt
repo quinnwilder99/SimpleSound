@@ -17,13 +17,17 @@ import androidx.compose.ui.graphics.TileMode
  * sacrificing readability.
  *
  * @param accent the user's chosen accent color; used as the glow's hue.
- * @param intensity how opaque the glow is at its brightest point (0..1).
+ * @param intensity how opaque the glow is at its brightest point (0..1). Kept
+ *                   fairly restrained by default — the glow sits underneath
+ *                   several liquid-glass surfaces that add their own
+ *                   brightness on top, so a hot backdrop stacks with them and
+ *                   reads as glare rather than depth.
  */
 @Composable
 fun GlowBackground(
     accent: Color,
     modifier: Modifier = Modifier,
-    intensity: Float = 0.55f
+    intensity: Float = 0.42f
 ) {
     Box(
         modifier = modifier

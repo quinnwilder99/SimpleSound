@@ -59,11 +59,19 @@ fun TrackRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 5.dp)
+            // Full glass (gloss + rim) is reserved for the selected state, where
+            // it earns its keep by marking exactly which rows are picked. At
+            // rest, dozens of rows stacked in a list would otherwise turn into
+            // a wall of hairline borders — so unselected rows get only a very
+            // faint flat wash, quiet enough to not compete with the artwork
+            // and text that actually carry the row.
             .liquidGlass(
                 corner = 20.dp,
                 tint = if (selected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
-                bodyAlpha = if (selected) 0.16f else 0.08f
+                bodyAlpha = if (selected) 0.16f else 0.05f,
+                showGloss = selected,
+                showRim = selected
             )
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),

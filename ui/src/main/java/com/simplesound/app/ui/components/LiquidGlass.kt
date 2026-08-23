@@ -36,15 +36,36 @@ import androidx.compose.ui.unit.dp
  * Apply to any container; best over the [GlowBackground] so refraction of the
  * radiant accent shows through.
  *
+ * Use with restraint. Liquid glass reads best as an occasional "hero" material
+ * — a persistent bar, a detail header, a selected row — not as the default
+ * skin for every row in a scrolling list. Stack the full effect (gloss + rim)
+ * on dozens of consecutive items and the individual glints disappear into a
+ * busy field of hairlines; nothing stands out because everything is glass.
+ * For repeated rows/cards, keep [showGloss] and [showRim] off and lean on a
+ * quieter flat [bodyAlpha] wash instead, reserving the full treatment for the
+ * one or two surfaces per screen that should actually draw the eye.
+ *
  * @param corner radius of the glass capsule. Defaults to a pill-ish 22dp.
  * @param tint optional accent hue mixed into the top gloss; defaults to the
  *             Material primary (accent) so the glass matches the user's theme.
  * @param bodyAlpha peak opacity of the glass body (0..1). Lower = more see-through.
+ * @param showGloss whether to pool the accent-tinted gloss near the top edge.
+ *                   Reserve this for the one or two surfaces per screen that
+ *                   should read as "the" glass moment (a persistent bar, a
+ *                   detail header). Turn it off for anything repeated in a
+ *                   list or grid — a gloss on every row stacks into visual
+ *                   noise instead of depth.
+ * @param showRim whether to draw the translucent hairline border. Same
+ *                reasoning as [showGloss]: a rim on every item in a long list
+ *                reads as a grid of cells, not glass. Keep it for standalone
+ *                or hero surfaces, drop it for repeated rows/cards.
  */
 fun Modifier.liquidGlass(
     corner: Dp = 22.dp,
     tint: Color = Color.Unspecified,
-    bodyAlpha: Float = 0.10f
+    bodyAlpha: Float = 0.10f,
+    showGloss: Boolean = true,
+    showRim: Boolean = true
 ): Modifier = this
     .clip(RoundedCornerShape(corner))
     .drawBehind {
@@ -67,32 +88,40 @@ fun Modifier.liquidGlass(
 
         // 2) Pooled gloss near the top, tinted by the accent so the glass
         //    refracts the radiant glow behind it. Kept soft and wide so it pools
-        //    gently near the top edge rather than glaring.
-        val glossCenter = Offset(x = size.width * 0.5f, y = size.height * 0.20f)
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    accent.copy(alpha = bodyAlpha * 0.8f),
-                    Color.Transparent
-                ),
-                center = glossCenter,
-                radius = size.minDimension * 0.95f,
-                tileMode = TileMode.Clamp
+        //    gently near the top edge rather than glaring. Opt-in via
+        //    [showGloss] — see its doc for why repeated rows skip this.
+        if (showGloss) {
+            val glossCenter = Offset(x = size.width * 0.5f, y = size.height * 0.20f)
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        accent.copy(alpha = bodyAlpha * 0.8f),
+                        Color.Transparent
+                    ),
+                    center = glossCenter,
+                    radius = size.minDimension * 0.95f,
+                    tileMode = TileMode.Clamp
+                )
             )
-        )
+        }
     }
     // Soft inner rim via a translucent white hairline border (laid over content).
     // Lowered top stop so the rim is a faint suggestion, not a bright edge.
-    .border(
-        width = 0.75.dp,
-        brush = Brush.verticalGradient(
-            colors = listOf(
-                Color.White.copy(alpha = 0.28f),
-                Color.White.copy(alpha = 0.06f)
+    // Opt-in via [showRim] — see its doc for why repeated rows skip this.
+    .let { mod ->
+        if (showRim) {
+            mod.border(
+                width = 0.75.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.28f),
+                        Color.White.copy(alpha = 0.06f)
+                    )
+                ),
+                shape = RoundedCornerShape(corner)
             )
-        ),
-        shape = RoundedCornerShape(corner)
-    )
+        } else mod
+    }
 
 /**
  * A tinted drop shadow painted behind a glass surface to give it lift without

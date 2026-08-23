@@ -63,10 +63,15 @@ fun PlaylistGridCard(
         modifier = modifier
             .padding(8.dp)
             .clip(RoundedCornerShape(20.dp))
+            // Gloss stays — it's what gives the artwork tile a bit of lift — but
+            // the rim is dropped: a hairline around every tile in a 2-column
+            // grid adds up to a lattice of borders that competes with the
+            // artwork itself.
             .liquidGlass(
                 corner = 20.dp,
                 tint = MaterialTheme.colorScheme.primary,
-                bodyAlpha = 0.10f
+                bodyAlpha = 0.10f,
+                showRim = false
             )
             .padding(10.dp)
     ) {
