@@ -55,7 +55,6 @@ import com.simplesound.app.ui.screens.favorites.FavoritesScreen
 import com.simplesound.app.ui.screens.folders.FoldersScreen
 import com.simplesound.app.ui.screens.playlists.PlaylistsScreen
 import com.simplesound.app.ui.screens.tracks.TracksScreen
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @Composable
@@ -78,29 +77,36 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
         ?: Tab.TRACKS
 
     // --- Center the active tab label within the horizontally scrollable tab row ---
-    // The tab row scrolls independently of the pager. Whenever the pager settles on a
-    // new page (from a swipe OR a tap), we animate the row so the selected label ends up
-    // visually centered in the viewport.
+    // The tab row scrolls independently of the pager. Rather than waiting for the pager
+    // to *settle* on a page and then animating the row afterward (which reads as an
+    // input-lag "catch up" step), we track the pager's continuous drag position every
+    // frame and keep the row's scroll offset locked to it in real time — the same feel
+    // as Samsung Sound's tab header, which moves in lockstep with your finger instead of
+    // snapping once you let go.
     //
     // Key idea: compute the label's CENTER from measured tab *widths* plus the row's
     // fixed padding/spacing. This is pure arithmetic on layout-stable values — widths
     // don't change just because the row scrolls — so the computed target is inherently
-    // scroll-independent. Our own animateScrollTo() therefore never re-triggers this
-    // computation, so there are no fighting animations and no jitter (which the previous
-    // positionInRoot-based logic suffered from whenever the relayout callbacks raced the
-    // scroll). The active label changes width when emphasized, which legitimately updates
-    // its measured width and re-centers to the exact final position.
+    // scroll-independent, and there's no fighting between our scroll writes and the
+    // measurement reads (which the previous positionInRoot-based logic suffered from).
+    // The active label changes width when emphasized, which legitimately updates its
+    // measured width and re-centers to the exact final position.
     val tabScrollState = rememberScrollState()
     val rowViewportPx = remember { mutableIntStateOf(0) }     // visible viewport width (px)
     // index -> measured width (px) of each tab label. Scroll-independent.
     val tabWidths = remember(enabledTabs) { mutableStateMapOf<Int, Int>() }
-    // A single coroutine for centering so overlapping animateScrollTo() calls can't fight.
-    var centeringJob by remember { mutableStateOf<Job?>(null) }
 
     // Density-aware conversions for the fixed row padding (16.dp) and tab spacing (20.dp),
     // computed once from the current density.
     val hPaddingPx = with(LocalDensity.current) { 16.dp.roundToPx() }   // per-side horizontal padding
     val spacingPx = with(LocalDensity.current) { 20.dp.roundToPx() }    // gap between tabs
+
+    // Continuous page position (e.g. 1.35 while 35% swiped from page 1 towards page 2).
+    // Reading currentPage/currentPageOffsetFraction directly in composition means this
+    // recomposes every frame the pager moves — whether from a finger drag or from the
+    // animateScrollToPage() a tab tap triggers below — so both interaction paths get the
+    // exact same smooth, continuous follow.
+    val pageProgress = pagerState.currentPage + pagerState.currentPageOffsetFraction
 
     LaunchedEffect(enabledTabs) {
         if (pagerState.currentPage !in enabledTabs.indices && enabledTabs.isNotEmpty()) {
@@ -108,27 +114,42 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
         }
     }
 
-    // Re-center whenever the pager settles on a new page (swipe, tap, or the initial
-    // restore above), or when the settled tab's measured width / the viewport changes
-    // (e.g. the active label finishing its emphasis resize). The snapshot reads the
-    // settled page's width and the widths needed to sum up to it, so a stale/intermediate
-    // target is always corrected to the final one.
+    // Keep the tab row's scroll offset following the pager every frame, blending between
+    // the current page's label center and whichever neighbor it's being dragged towards,
+    // proportional to how far the drag has progressed — instead of jumping only once the
+    // pager settles on the new page.
     LaunchedEffect(enabledTabs, hPaddingPx, spacingPx) {
         snapshotFlow {
-            val page = pagerState.settledPage
+            val page = pagerState.currentPage
+            val offsetFraction = pagerState.currentPageOffsetFraction
             // Read all tab widths into an ordered list so recomposition-tracking covers them.
             val widths = enabledTabs.indices.mapNotNull { tabWidths[it] }
-            Triple(page, widths, rowViewportPx.intValue)
-        }.collect { (page, widths, viewport) ->
+            Triple(page, offsetFraction, widths) to rowViewportPx.intValue
+        }.collect { (state, viewport) ->
+            val (page, offsetFraction, widths) = state
             if (viewport <= 0 || widths.size != enabledTabs.size) return@collect
             if (page !in widths.indices) return@collect
-            // Content-space left of tab[page]: padding, then each prior tab width + spacing.
-            var left = hPaddingPx
-            for (i in 0 until page) left += widths[i] + spacingPx
-            val center = left + widths[page] / 2
-            val target = (center - viewport / 2).coerceIn(0, tabScrollState.maxValue)
-            centeringJob?.cancel()
-            centeringJob = scope.launch { tabScrollState.animateScrollTo(target) }
+
+            // Content-space center of tab[index]: padding, then each prior tab width + spacing.
+            fun centerOf(index: Int): Int {
+                var left = hPaddingPx
+                for (i in 0 until index) left += widths[i] + spacingPx
+                return left + widths[index] / 2
+            }
+
+            val neighbor = page + if (offsetFraction >= 0f) 1 else -1
+            val currentCenter = centerOf(page)
+            val blendedCenter = if (neighbor in widths.indices) {
+                val neighborCenter = centerOf(neighbor)
+                currentCenter + ((neighborCenter - currentCenter) * kotlin.math.abs(offsetFraction)).toInt()
+            } else {
+                currentCenter
+            }
+            val target = (blendedCenter - viewport / 2).coerceIn(0, tabScrollState.maxValue)
+            // A direct (non-animated) scrollTo, called every frame the pager moves, IS the
+            // animation — it rides the pager's own motion rather than racing a separate
+            // animateScrollTo() against it.
+            tabScrollState.scrollTo(target)
         }
     }
 
@@ -166,23 +187,48 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .horizontalScroll(tabScrollState)
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
                         .onGloballyPositioned { coords ->
                             // The viewport width (the on-screen width of the scrollable row) is
-                            // what we center the selected label within.
+                            // what we center the selected label within. This MUST be measured
+                            // here, before .horizontalScroll(), because inside a scrollable
+                            // container the child is measured with unbounded width — placing
+                            // onGloballyPositioned after horizontalScroll (as before) captured
+                            // the row's unconstrained *content* width (sum of all tab widths),
+                            // not the actual visible screen width, which threw off the centering
+                            // math below.
                             rowViewportPx.intValue = coords.size.width
-                        },
+                        }
+                        .horizontalScroll(tabScrollState)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     enabledTabs.forEachIndexed { index, tab ->
-                        val active = tab == selectedTab
+                        // How "selected" this tab looks right now: 1 at pageProgress == index,
+                        // fading linearly to 0 a full page away. Driven by the same continuous
+                        // pageProgress as the row scroll above, so the label's size/weight/color
+                        // glide in step with the swipe instead of snapping the instant the
+                        // pager's current-page flips.
+                        val emphasis = (1f - kotlin.math.abs(pageProgress - index)).coerceIn(0f, 1f)
                         Text(
                             text = tab.label,
-                            style = if (active) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleLarge,
-                            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontSize = androidx.compose.ui.unit.lerp(
+                                    MaterialTheme.typography.titleLarge.fontSize,
+                                    MaterialTheme.typography.headlineLarge.fontSize,
+                                    emphasis
+                                )
+                            ),
+                            color = androidx.compose.ui.graphics.lerp(
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                MaterialTheme.colorScheme.primary,
+                                emphasis
+                            ),
+                            fontWeight = androidx.compose.ui.text.font.lerp(
+                                FontWeight.Normal,
+                                FontWeight.Bold,
+                                emphasis
+                            ),
                             modifier = Modifier
                                 .onGloballyPositioned { coords ->
                                     // Record this tab's FULL outer footprint (incl. its inner
