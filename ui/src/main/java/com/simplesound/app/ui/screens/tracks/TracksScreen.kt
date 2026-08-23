@@ -1,6 +1,5 @@
 ﻿package com.simplesound.app.ui.screens.tracks
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Track
@@ -33,7 +31,12 @@ import com.simplesound.app.ui.components.SortHeader
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
-import java.io.File
+import com.simplesound.app.util.shareTrack
+
+/** Sort options offered for the flat Tracks list, i.e. everything except
+ *  Custom order (which needs a specific playlist to hang its saved order off
+ *  of — see [SortHeader]'s `options` doc comment). */
+private val TRACKS_TAB_SORT_OPTIONS = SortOption.entries.filterNot { it == SortOption.CUSTOM_ORDER }
 
 /** All tracks, sortable by date added / name / artist / length. */
 @Composable
@@ -94,7 +97,10 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
                 current = sort,
                 onSort = { vm.setTracksSort(it) },
                 onShuffle = { player.playQueue(sorted.shuffled(), 0, "All tracks") },
-                onPlayAll = { player.playQueue(sorted, 0, "All tracks") }
+                onPlayAll = { player.playQueue(sorted, 0, "All tracks") },
+                // No playlist context here, so Custom order (which needs one)
+                // isn't offered — see SortHeader's `options` doc comment.
+                options = TRACKS_TAB_SORT_OPTIONS
             )
             LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 160.dp)) {
                 items(sorted, key = { it.id }) { track ->
@@ -123,7 +129,7 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
             selectedCount = selectedIds.size,
             onPlay = {
                 if (selectedTracks.isNotEmpty()) {
-                    // Temp queue only Ã¢ not persisted as a playlist.
+                    // Temp queue only — not persisted as a playlist.
                     player.playQueue(selectedTracks, 0, "Queue")
                     onOpenNowPlaying()
                     clearSelection()
@@ -200,24 +206,5 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
             },
             onDismiss = { showDeleteMany = false }
         )
-    }
-}
-
-/** Share a track's file via Android's share sheet. */
-private fun shareTrack(context: android.content.Context, track: Track) {
-    val path = track.uri.removePrefix("file://")
-    val file = File(path)
-    if (file.exists()) {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "audio/*"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "Share \"${track.title}\""))
     }
 }

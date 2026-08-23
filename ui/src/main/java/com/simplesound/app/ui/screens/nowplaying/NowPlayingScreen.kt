@@ -1,6 +1,5 @@
 package com.simplesound.app.ui.screens.nowplaying
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,7 +57,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
@@ -68,7 +66,8 @@ import com.simplesound.app.ui.components.DeleteTrackDialog
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.QueueSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
-import java.io.File
+import com.simplesound.app.util.formatDuration
+import com.simplesound.app.util.shareTrack
 
 /**
  * Full-screen now-playing view. Opens when a track is tapped or when the mini-player
@@ -237,7 +236,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = formatClock(pos),
+                        text = formatDuration(pos),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -259,7 +258,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                         )
                     )
                     Text(
-                        text = formatClock(duration),
+                        text = formatDuration(duration),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -459,29 +458,3 @@ private fun PlaybackSpeedSheet(
     }
 }
 
-/** mm:ss formatting for the timeline. */
-private fun formatClock(ms: Long): String {
-    val totalSec = (ms / 1000).coerceAtLeast(0)
-    val m = totalSec / 60
-    val s = totalSec % 60
-    return "%d:%02d".format(m, s)
-}
-
-/** Share a track's file via Android's share sheet. */
-private fun shareTrack(context: android.content.Context, track: com.simplesound.app.data.model.Track) {
-    val path = track.uri.removePrefix("file://")
-    val file = File(path)
-    if (file.exists()) {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "audio/*"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "Share \"${track.title}\""))
-    }
-}

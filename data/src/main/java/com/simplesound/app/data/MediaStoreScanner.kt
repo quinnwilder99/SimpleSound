@@ -3,7 +3,6 @@ package com.simplesound.app.data
 import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
-import android.util.Log
 import com.simplesound.app.data.model.Track
 import java.io.File
 
@@ -30,8 +29,6 @@ import java.io.File
  * art first and only falls back to this when no embedded picture exists.
  */
 object MediaStoreScanner {
-
-    private const val TAG = "MediaStoreScanner"
 
     fun scan(context: Context): List<Track> {
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -70,15 +67,6 @@ object MediaStoreScanner {
                 val albumArtUri = ContentUris.withAppendedId(
                     android.net.Uri.parse("content://media/external/audio/albumart"), albumId
                 ).toString()
-
-                // Diagnostic log: trackId, albumId, content uri (embedded-art
-                // source), and the album-level fallback uri. Inspect in logcat
-                // (tag = MediaStoreScanner) to confirm two different track ids
-                // do not collapse to the same embedded/album art.
-                Log.d(
-                    TAG,
-                    "trackId=$id albumId=$albumId uri=$contentUri albumArtUri=$albumArtUri title=${c.getString(titleCol)}"
-                )
 
                 result += Track(
                     id = id,

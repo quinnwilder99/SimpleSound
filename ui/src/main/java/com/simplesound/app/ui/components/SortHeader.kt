@@ -41,7 +41,12 @@ fun SortHeader(
     onSort: (SortOption) -> Unit,
     onShuffle: () -> Unit,
     onPlayAll: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // CUSTOM_ORDER only means anything inside a single playlist (it's backed by
+    // a per-playlist saved order — see MusicRepository.sortPlaylistTracks); the
+    // Tracks tab has no playlist context to hang a custom order off of, so it
+    // must pass a restricted list here rather than default to every SortOption.
+    options: List<SortOption> = SortOption.entries
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(
@@ -60,7 +65,7 @@ fun SortHeader(
             Text(current.label, style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground)
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                SortOption.entries.forEach { option ->
+                options.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(option.label) },
                         onClick = { onSort(option); expanded = false }

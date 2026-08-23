@@ -1,6 +1,5 @@
 package com.simplesound.app.ui.screens.search
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -33,7 +32,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
@@ -45,7 +43,7 @@ import com.simplesound.app.ui.components.SelectionActionBar
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
-import java.io.File
+import com.simplesound.app.util.shareTrack
 
 /**
  * Search / look-up screen. Lets the user find any track in the library by title,
@@ -258,24 +256,5 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
             },
             onDismiss = { showDeleteMany = false }
         )
-    }
-}
-
-/** Share a track's file via Android's share sheet. */
-private fun shareTrack(context: android.content.Context, track: Track) {
-    val path = track.uri.removePrefix("file://")
-    val file = File(path)
-    if (file.exists()) {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "audio/*"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "Share \"${track.title}\""))
     }
 }

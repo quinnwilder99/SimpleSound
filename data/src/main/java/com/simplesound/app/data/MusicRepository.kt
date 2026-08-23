@@ -252,27 +252,26 @@ object MusicRepository {
         return ids.mapNotNull { map[it] }
     }
 
-    fun sortedTracks(option: SortOption): List<Track> = _tracks.value.sortedWith(
-        when (option) {
-            SortOption.DATE_ADDED -> compareByDescending { it.dateAddedSec }
-            SortOption.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-            SortOption.ARTIST -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.artistOrUnknown }
-            SortOption.LENGTH -> compareBy { it.durationMs }
-            // Custom order only applies within a playlist; fall back to date added.
-            SortOption.CUSTOM_ORDER -> compareByDescending { it.dateAddedSec }
-        }
-    )
+    /**
+     * The comparator for every [SortOption] except [SortOption.CUSTOM_ORDER],
+     * which has no meaning outside a specific playlist's saved order (see
+     * [sortPlaylistTracks]) and is resolved differently by each caller below.
+     */
+    private fun comparatorFor(option: SortOption): Comparator<Track> = when (option) {
+        SortOption.DATE_ADDED, SortOption.CUSTOM_ORDER -> compareByDescending { it.dateAddedSec }
+        SortOption.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+        SortOption.ARTIST -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.artistOrUnknown }
+        SortOption.LENGTH -> compareBy { it.durationMs }
+    }
+
+    fun sortedTracks(option: SortOption): List<Track> = _tracks.value.sortedWith(comparatorFor(option))
 
     /** Sort an arbitrary list of tracks (e.g. a playlist's contents) by [option]. */
-    fun sortTracks(tracks: List<Track>, option: SortOption): List<Track> = tracks.sortedWith(
-        when (option) {
-            SortOption.DATE_ADDED -> compareByDescending { it.dateAddedSec }
-            SortOption.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-            SortOption.ARTIST -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.artistOrUnknown }
-            SortOption.LENGTH -> compareBy { it.durationMs }
-            SortOption.CUSTOM_ORDER -> compareBy { 0 } // no playlist context; keep input order
-        }
-    )
+    fun sortTracks(tracks: List<Track>, option: SortOption): List<Track> =
+        // No playlist context to resolve a custom order against here, so keep
+        // the input order rather than falling back to date-added like
+        // sortedTracks() does.
+        if (option == SortOption.CUSTOM_ORDER) tracks else tracks.sortedWith(comparatorFor(option))
 
     /**
      * Sort a playlist's tracks by [option]. When [option] is [SortOption.CUSTOM_ORDER],

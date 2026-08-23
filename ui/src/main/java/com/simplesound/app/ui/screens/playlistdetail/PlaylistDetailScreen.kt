@@ -80,7 +80,13 @@ fun PlaylistDetailScreen(
     val playlistTracks = vm.tracksByIds(playlist.trackIds)
     // Persisted per-playlist sort: the chosen sort stays put across app restarts
     // and is never reset until the user explicitly changes it.
-    val sort by vm.playlistSort(playlistId).collectAsStateWithLifecycle()
+    // vm.playlistSort() launches a new backing collector each time it's called
+    // (see its doc comment), so it must be remembered per playlistId rather than
+    // invoked directly in the composable body — otherwise every recomposition of
+    // this screen (selection changes, dialogs opening, etc.) would leak another
+    // eager StateFlow collector into the ViewModel's scope for its whole lifetime.
+    val playlistSortFlow = remember(playlistId) { vm.playlistSort(playlistId) }
+    val sort by playlistSortFlow.collectAsStateWithLifecycle()
     // Bumped after each custom-order move so the list recomputes from the newly
     // persisted order. (The custom order lives in SharedPreferences, not a flow,
     // so we need an explicit recomposition trigger.)

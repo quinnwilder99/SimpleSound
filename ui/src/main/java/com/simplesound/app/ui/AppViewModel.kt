@@ -90,6 +90,11 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
      * open. The cache is kept in sync by [setPlaylistSort] and by collection of
      * the underlying persisted flow, so subsequent recompositions reuse the
      * last-applied sort instead of resetting to the default.
+     *
+     * Each call launches a new eager collector in [viewModelScope] that lives
+     * for the ViewModel's lifetime, so callers MUST `remember(playlistId)` the
+     * returned flow rather than invoking this directly in a composable body —
+     * otherwise every recomposition leaks another collector.
      */
     fun playlistSort(playlistId: String): StateFlow<SortOption> {
         val seed = playlistSortCache[playlistId] ?: DEFAULT_PLAYLIST_SORT
