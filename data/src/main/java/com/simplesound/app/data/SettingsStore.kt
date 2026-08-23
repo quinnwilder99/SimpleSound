@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.simplesound.app.data.model.SortOption
@@ -19,6 +20,12 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 val DEFAULT_PLAYLIST_SORT: SortOption = SortOption.DATE_ADDED
 
 /**
+ * Upper bound for the crossfade duration, matching the range Samsung Music
+ * exposes in its own crossfade slider. 0 means crossfade is off.
+ */
+const val MAX_CROSSFADE_SECONDS: Int = 12
+
+/**
  * Persists the two "simple" settings that are live in v0.1: the accent color and
  * the tab configuration (order + enabled). Encoded compactly so no schema is
  * needed. Tracks is force-enabled on read regardless of what is stored.
@@ -32,6 +39,11 @@ class SettingsStore(private val context: Context) {
         // Encoded "id1=NAME,id2=CUSTOM_ORDER,..." so each playlist remembers its
         // own last-chosen sort, independent of the Tracks tab sort.
         val PLAYLIST_SORTS = stringPreferencesKey("playlist_sorts")
+        // Seconds of overlap between the outgoing and incoming track, Samsung
+        // Music style. 0 (the default) means crossfade is off. Read directly by
+        // PlaybackService, not just the UI layer, since the fade has to happen
+        // even while the app's Activity/ViewModel isn't alive.
+        val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
     }
 
     val accent: Flow<AccentColor> = context.dataStore.data.map { prefs ->
@@ -47,6 +59,11 @@ class SettingsStore(private val context: Context) {
         SortOption.fromName(prefs[Keys.TRACKS_SORT])
     }
 
+    /** Crossfade duration in seconds, 0..[MAX_CROSSFADE_SECONDS]; 0 = off (the default). */
+    val crossfadeSeconds: Flow<Int> = context.dataStore.data.map { prefs ->
+        (prefs[Keys.CROSSFADE_SECONDS] ?: 0).coerceIn(0, MAX_CROSSFADE_SECONDS)
+    }
+
     suspend fun setAccent(accent: AccentColor) {
         context.dataStore.edit { it[Keys.ACCENT] = accent.name }
     }
@@ -57,6 +74,10 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setTracksSort(option: SortOption) {
         context.dataStore.edit { it[Keys.TRACKS_SORT] = option.name }
+    }
+
+    suspend fun setCrossfadeSeconds(seconds: Int) {
+        context.dataStore.edit { it[Keys.CROSSFADE_SECONDS] = seconds.coerceIn(0, MAX_CROSSFADE_SECONDS) }
     }
 
     /** The user's last-chosen sort for [playlistId], or [DEFAULT_PLAYLIST_SORT]. */

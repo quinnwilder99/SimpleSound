@@ -4,16 +4,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
@@ -38,8 +38,10 @@ import com.simplesound.app.ui.LocalPlayer
 /**
  * Persistent now-playing bar pinned above the tab bar. Always visible once a
  * track has been played at least once; it keeps showing the last played track
- * title even when playback is stopped. Shows only the track title plus three
- * transport controls: reverse (previous), play/stop (toggle), and skip (next).
+ * title even when playback is stopped. Mirrors Samsung Music's mini player:
+ * the track's own artwork thumbnail, title over artist, three transport
+ * controls (reverse / play-stop / skip), and a thin progress line along the
+ * very bottom edge that fills as the track plays.
  *
  * The bar is rendered in a "liquid glass" style reminiscent of Apple's design
  * language: a translucent frosted surface with a soft specular highlight along
@@ -54,10 +56,13 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     val track by player.currentTrack.collectAsStateWithLifecycle()
     val lastPlayed by player.lastPlayedTrack.collectAsStateWithLifecycle()
     val isPlaying by player.isPlaying.collectAsStateWithLifecycle()
+    val positionMs by player.positionMs.collectAsStateWithLifecycle()
+    val durationMs by player.durationMs.collectAsStateWithLifecycle()
 
     // Prefer the currently playing track, fall back to the last played track so
     // the bar stays visible after stop() clears the current track.
     val display = track ?: lastPlayed ?: return
+    val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
 
     // Liquid-glass palette. The surface is a frosted translucent layer; a
     // top-down specular gradient adds the "wet" highlight that defines the glass
@@ -71,9 +76,10 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     val glassEdgeBottom = Color.White.copy(alpha = 0.05f)
     val iconTint = Color.White.copy(alpha = 0.92f)
     val textTint = Color.White.copy(alpha = 0.95f)
-    val albumRing = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+    val subTextTint = Color.White.copy(alpha = 0.65f)
+    val progressTint = MaterialTheme.colorScheme.primary
 
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 10.dp)
@@ -99,45 +105,71 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
                 shape = RoundedCornerShape(28.dp)
             )
             .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(albumRing),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Rounded.MusicNote,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.95f),
-                modifier = Modifier.size(22.dp)
+            // embeddedSource = display.uri so Artwork decodes the per-track
+            // embedded picture (ID3 APIC) first, same order TrackRow/NowPlaying
+            // follow; display.albumArtUri is the album-level fallback.
+            Artwork(
+                uri = display.albumArtUri,
+                embeddedSource = display.uri,
+                modifier = Modifier.size(44.dp),
+                corner = 10.dp
             )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = display.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = textTint,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = display.artistOrUnknown,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = subTextTint,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            // Transport controls: reverse (previous), play/stop (toggle), skip (next).
+            IconButton(onClick = { player.previous() }) {
+                Icon(Icons.Rounded.SkipPrevious, "Previous", tint = iconTint)
+            }
+            IconButton(onClick = { player.togglePlayPause() }) {
+                Icon(
+                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    tint = iconTint
+                )
+            }
+            IconButton(onClick = { player.next() }) {
+                Icon(Icons.Rounded.SkipNext, "Next", tint = iconTint)
+            }
         }
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = display.title,
-            style = MaterialTheme.typography.titleMedium,
-            color = textTint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        // Transport controls: reverse (previous), play/stop (toggle), skip (next).
-        IconButton(onClick = { player.previous() }) {
-            Icon(Icons.Rounded.SkipPrevious, "Previous", tint = iconTint)
-        }
-        IconButton(onClick = { player.togglePlayPause() }) {
-            Icon(
-                if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                contentDescription = if (isPlaying) "Pause" else "Play",
-                tint = iconTint
+
+        // Thin progress line along the bottom edge, Samsung Music-style; only
+        // shown once a duration is actually known so it doesn't flash at 0%
+        // before the first track ever loads.
+        if (durationMs > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .height(2.5.dp)
+                    .background(Color.White.copy(alpha = 0.12f))
             )
-        }
-        IconButton(onClick = { player.next() }) {
-            Icon(Icons.Rounded.SkipNext, "Next", tint = iconTint)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth(progress)
+                    .height(2.5.dp)
+                    .background(progressTint)
+            )
         }
     }
 }

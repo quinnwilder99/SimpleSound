@@ -50,6 +50,7 @@ fun SettingsScreen(
     onManageTabs: () -> Unit,
     onAccentColor: () -> Unit = {},
     onSleepTimer: () -> Unit = {},
+    onCrossfade: () -> Unit = {},
     onAbout: () -> Unit = {}
 ) {
     Scaffold(
@@ -111,6 +112,15 @@ fun SettingsScreen(
                     title = "Sleep timer",
                     subtitle = "Pause music automatically after a set time",
                     onClick = onSleepTimer
+                )
+            }
+
+            // ---- Crossfade ----
+            item {
+                SettingsRow(
+                    title = "Crossfade",
+                    subtitle = "Smoothly blend the end of one track into the next",
+                    onClick = onCrossfade
                 )
             }
 

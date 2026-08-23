@@ -38,6 +38,10 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
     val tracksSort = settings.tracksSort
         .stateIn(viewModelScope, SharingStarted.Eagerly, SortOption.DATE_ADDED)
 
+    /** Crossfade duration in seconds (0 = off); the fade itself runs in PlaybackService. */
+    val crossfadeSeconds = settings.crossfadeSeconds
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
     // Repository-backed library flows (shared singletons).
     val tracks = MusicRepository.tracks
     val userPlaylists = MusicRepository.userPlaylists
@@ -73,6 +77,8 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
     }
 
     fun setTracksSort(option: SortOption) = viewModelScope.launch { settings.setTracksSort(option) }
+
+    fun setCrossfadeSeconds(seconds: Int) = viewModelScope.launch { settings.setCrossfadeSeconds(seconds) }
 
     /**
      * In-memory cache of each playlist's last-known sort option. Seeding new
