@@ -4,21 +4,27 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.Deselect
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -82,6 +88,10 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
         selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
     }
     fun clearSelection() { selectedIds = emptySet() }
+    val allSelected = results.isNotEmpty() && selectedIds.size == results.size
+    fun toggleSelectAll() {
+        selectedIds = if (allSelected) emptySet() else results.map { it.id }.toSet()
+    }
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -160,24 +170,48 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
                     modifier = Modifier.align(Alignment.Center)
                 )
             } else {
-                LazyColumn(contentPadding = PaddingValues(bottom = 160.dp)) {
-                    items(results, key = { it.id }) { track ->
-                        val selected = track.id in selectedIds
-                        TrackRow(
-                            track = track,
-                            selectionMode = selectionMode,
-                            selected = selected,
-                            onLongClick = { toggleSelected(track.id) },
-                            onClick = {
-                                if (selectionMode) {
-                                    toggleSelected(track.id)
-                                } else {
-                                    player.playQueue(results, results.indexOf(track), "Search results")
-                                    onOpenNowPlaying()
-                                }
-                            },
-                            onMore = { sheetTrack = track }
+                Column(Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${results.size} result" + if (results.size == 1) "" else "s",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
                         )
+                        TextButton(onClick = { toggleSelectAll() }) {
+                            Icon(
+                                if (allSelected) Icons.Rounded.Deselect else Icons.Rounded.SelectAll,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (allSelected) "Deselect all" else "Select all")
+                        }
+                    }
+                    LazyColumn(contentPadding = PaddingValues(bottom = 160.dp)) {
+                        items(results, key = { it.id }) { track ->
+                            val selected = track.id in selectedIds
+                            TrackRow(
+                                track = track,
+                                selectionMode = selectionMode,
+                                selected = selected,
+                                onLongClick = { toggleSelected(track.id) },
+                                onClick = {
+                                    if (selectionMode) {
+                                        toggleSelected(track.id)
+                                    } else {
+                                        player.playQueue(results, results.indexOf(track), "Search results")
+                                        onOpenNowPlaying()
+                                    }
+                                },
+                                onMore = { sheetTrack = track }
+                            )
+                        }
                     }
                 }
             }

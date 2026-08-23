@@ -52,16 +52,40 @@ class MainActivity : ComponentActivity() {
         val queueTitle = MusicRepository.lastQueueTitle()
         val queueIds = MusicRepository.lastQueueTrackIds()
         val queueIndex = MusicRepository.lastQueueIndex()
-        var restoredQueue = false
-        if (queueIds.isNotEmpty() && queueIndex >= 0) {
+
+        // Resolves the persisted queue ids against the current in-memory library
+        // and, if they match, restores the full queue. Returns true on success.
+        fun tryRestoreQueue(): Boolean {
+            if (queueIds.isEmpty() || queueIndex < 0) return false
             val resolved = MusicRepository.tracksByIds(queueIds)
-            if (resolved.isNotEmpty()) {
-                val playing = resolved.firstOrNull { it.id == lastId }
-                    ?: resolved.getOrNull(queueIndex)
-                if (playing != null) {
-                    val idx = resolved.indexOf(playing)
-                    player.restoreQueue(resolved, idx, queueTitle, savedPosition)
-                    restoredQueue = true
+            if (resolved.isEmpty()) return false
+            val playing = resolved.firstOrNull { it.id == lastId } ?: resolved.getOrNull(queueIndex)
+                ?: return false
+            val idx = resolved.indexOf(playing)
+            player.restoreQueue(resolved, idx, queueTitle, savedPosition)
+            return true
+        }
+
+        // On a cold start (e.g. after the OS killed the process when the task was
+        // swiped away while paused) the MediaStore scan hasn't run yet, so the
+        // library is still the sample seed and tracksByIds() above resolves
+        // nothing -- this always misses on a true cold start. Retry once the
+        // real device library finishes loading (see the "upgrade" collector
+        // below for the single-track equivalent), but only if nothing has
+        // already populated the queue in the meantime (either this retry
+        // succeeding once, or the user starting playback of their own).
+        var restoredQueue = tryRestoreQueue()
+        if (!restoredQueue) {
+            lifecycleScope.launch {
+                MusicRepository.tracks.collect {
+                    // Bail if the queue got populated another way already, or if
+                    // the user has since started actual playback (e.g. of the
+                    // single-track fallback below) -- don't clobber that with a
+                    // stale restore.
+                    if (restoredQueue || player.queue.value.isNotEmpty() || player.isPlaying.value) {
+                        return@collect
+                    }
+                    if (tryRestoreQueue()) restoredQueue = true
                 }
             }
         }

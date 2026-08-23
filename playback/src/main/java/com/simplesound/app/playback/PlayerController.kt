@@ -35,6 +35,20 @@ class PlayerController(private val context: Context) {
     private val trackIndex = mutableMapOf<String, Track>()
 
     /**
+     * Set by [restoreQueue] when it runs before [connect] has produced a
+     * [MediaController] (the normal case: [MainActivity] restores state in
+     * onCreate, before onStart calls [connect]). [prepareRestoredQueue] silently
+     * no-ops without a controller, so without this the queue would never
+     * actually be loaded into the real player -- cleared once it succeeds.
+     */
+    private data class PendingQueueRestore(
+        val tracks: List<Track>,
+        val startIndex: Int,
+        val positionMs: Long
+    )
+    private var pendingQueueRestore: PendingQueueRestore? = null
+
+    /**
      * Builds the [MediaItem] fed to the [MediaController]/[MediaSession]. The track's
      * own content URI is stashed in [MediaMetadata.extras] so [TrackArtworkBitmapLoader]
      * can decode its *embedded* per-track picture for the lock-screen/notification
@@ -110,6 +124,7 @@ class PlayerController(private val context: Context) {
         if (positionMs > 0) _positionMs.value = positionMs
         val dur = tracks[safeIndex].durationMs
         if (dur > 0) _durationMs.value = dur
+        pendingQueueRestore = PendingQueueRestore(tracks, safeIndex, positionMs)
         prepareRestoredQueue(tracks, safeIndex, positionMs)
     }
 
@@ -129,6 +144,7 @@ class PlayerController(private val context: Context) {
         c.setMediaItems(items, startIndex, positionMs.coerceAtLeast(0L))
         c.prepare()
         c.playWhenReady = false
+        pendingQueueRestore = null
     }
 
     private val _isPlaying = MutableStateFlow(false)
@@ -200,9 +216,21 @@ class PlayerController(private val context: Context) {
                 Player.REPEAT_MODE_ALL -> 1
                 else -> 0
             }
-            _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
+            // Only overwrite the duration from the (possibly still-empty) real
+            // controller when it actually has one -- a restoreQueue()/
+            // restoreLastPlayedTrack() call earlier in onCreate (before this
+            // future resolved) may have already primed it from persisted data,
+            // and a fresh controller reports 0 until media is loaded below.
+            controller?.duration?.takeIf { it > 0 }?.let { _durationMs.value = it }
             updateProgressPolling()
-            maybePrepareRestoredTrack()
+            // Prefer finishing a queue restore that couldn't run earlier because
+            // the controller wasn't ready yet; fall back to the single-track path.
+            val pendingQueue = pendingQueueRestore
+            if (pendingQueue != null) {
+                prepareRestoredQueue(pendingQueue.tracks, pendingQueue.startIndex, pendingQueue.positionMs)
+            } else {
+                maybePrepareRestoredTrack()
+            }
         }, ContextCompat.getMainExecutor(context))
     }
 
@@ -403,7 +431,16 @@ class PlayerController(private val context: Context) {
     private fun maybePrepareRestoredTrack() {
         val track = _lastPlayedTrack.value ?: return
         val c = controller ?: return
-        if (c.mediaItemCount > 0 || _currentTrack.value != null) return
+        // Note: _currentTrack.value is deliberately NOT checked here. restoreQueue()/
+        // restoreLastPlayedTrack() always set it synchronously (so the UI has
+        // something to show immediately), including when they run in onCreate
+        // before connect() has produced a controller -- at that point
+        // prepareRestoredTrack() silently no-ops for lack of one. Gating on
+        // _currentTrack.value here would then make this a permanent no-op too,
+        // leaving the real player with zero media items forever (play button
+        // does nothing, position/duration stuck at 0). mediaItemCount is the
+        // correct guard: it reflects the real controller, not just the flow.
+        if (c.mediaItemCount > 0) return
         val pos = _positionMs.value.takeIf { it >= 0L } ?: -1L
         prepareRestoredTrack(track, pos)
     }
