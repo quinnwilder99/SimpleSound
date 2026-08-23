@@ -145,7 +145,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.size(8.dp))
 
             Text(
-                text = "Version: v1.0",
+                text = "Version: v1.1.0",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Medium

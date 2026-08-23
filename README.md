@@ -6,7 +6,7 @@ Made this because I am tired of bad and confusing MP3 players on the market. Jee
 
 SimpleSound is a dark-only Android music player focused on a calm, flagship listening experience inspired by Samsung's native music player. The goal is simplicity: no unnecessary features, no clutter, one accent color, roomy typography, and a tab system controlled by the user.
 
-> Status: **v0.1** — Core navigation, library management, playlists, favorites, settings, and Media3 playback are implemented. The application uses a multi-module architecture with offline-first data management, dependency injection, and separated playback/UI layers.
+> Status: **v1.1.0** — Core navigation, library management, playlists, favorites, search, sleep timer, crossfade, and Media3 playback are all implemented. The app uses a multi-module architecture with offline-first data management, dependency injection, and separated playback/UI layers.
 
 ---
 
@@ -23,6 +23,12 @@ SimpleSound is a dark-only Android music player focused on a calm, flagship list
   * Name
   * Artist
   * Length
+  * **Custom order** — drag to reorder tracks by hand, order is remembered
+
+## Search
+
+* Instant search across the whole library from any tab
+* Multi-select results directly from the search screen (select all / deselect, share, delete, add to playlist)
 
 ## Tabs (User Configurable)
 
@@ -67,6 +73,16 @@ Available tabs:
 
   * Filesystem-based browsing
 
+## Multi-Select Actions
+
+Long-press any track to enter selection mode across Tracks, Albums, Artists, Folders, Playlists, and Search:
+
+* Play selected tracks
+* Add to playlist
+* Share
+* Remove from playlist / Delete
+* Select all / Deselect all
+
 ---
 
 # Playback
@@ -75,10 +91,13 @@ Powered by AndroidX Media3.
 
 Features:
 
-* Background playback service
+* Background playback service with persistent lock-screen / notification controls
 * Media session integration
-* Persistent playback control
 * ExoPlayer-based audio engine
+* **Queue** — view and reorder the current play queue on the fly without touching the source playlist
+* **Crossfade** — smoothly blend the end of one track into the start of the next, with adjustable duration (0–12s, presets or custom)
+* **Sleep timer** — auto-pause playback after a preset or custom duration (up to 12 hours), with a live countdown
+* Mini player that follows you across tabs, expandable into the full Now Playing screen
 
 ---
 
@@ -201,21 +220,21 @@ Contains shared code used across modules:
 # Tech Stack
 
 | Layer                | Technology                      |
-| -------------------- | ------------------------------- |
-| Language             | Kotlin                          |
-| UI                   | Jetpack Compose + Material 3    |
-| Architecture         | Multi-module Clean Architecture |
-| Dependency Injection | Hilt                            |
-| Navigation           | Navigation Compose              |
-| Playback             | AndroidX Media3 + ExoPlayer     |
-| Database             | Room                            |
-| Preferences          | DataStore                       |
-| Async                | Kotlin Coroutines + Flow        |
-| Images               | Coil                            |
-| Library Scanner      | MediaStore                      |
-| Build System         | Gradle Kotlin DSL               |
-| Min SDK              | 26                              |
-| Target SDK           | 34                              |
+| --------------------- | -------------------------------- |
+| Language              | Kotlin                           |
+| UI                    | Jetpack Compose + Material 3     |
+| Architecture          | Multi-module Clean Architecture  |
+| Dependency Injection  | Hilt                              |
+| Navigation            | Navigation Compose               |
+| Playback              | AndroidX Media3 + ExoPlayer      |
+| Database              | Room                              |
+| Preferences           | DataStore                         |
+| Async                 | Kotlin Coroutines + Flow          |
+| Images                | Coil                               |
+| Library Scanner       | MediaStore                        |
+| Build System          | Gradle Kotlin DSL                 |
+| Min SDK               | 26                                 |
+| Target SDK            | 34                                 |
 
 ---
 
@@ -231,9 +250,13 @@ The app avoids:
 * Visual clutter
 * Excessive UI elements
 
----
+## 2. Liquid glass UI
 
-## 2. One accent color
+Key surfaces — the mini player, headers, and other "hero" moments — use a soft, frosted glass material inspired by Apple's Liquid Glass: a diffuse light-to-dark sheen, a faint accent-tinted glow, and a hairline rim, all drawn in pure Compose (no blur pass needed).
+
+Used sparingly on purpose — the glass effect is reserved for one or two standout surfaces per screen so it still reads as something special, instead of being applied to every row in a list.
+
+## 3. One accent color
 
 The user chooses a single accent color:
 
@@ -252,10 +275,9 @@ The accent drives:
 * Buttons
 * Toggles
 * Headers
+* The liquid glass gloss tint
 
----
-
-## 3. Offline-first experience
+## 4. Offline-first experience
 
 Music playback should not depend on the internet.
 
@@ -266,9 +288,7 @@ The app prioritizes:
 * Reliable playback
 * Persistent user settings
 
----
-
-## 4. Modular by design
+## 5. Modular by design
 
 The application is split into independent modules to:
 
@@ -312,11 +332,10 @@ Run lint:
 Planned features:
 
 * Gapless playback
-* Crossfade transitions
 * Audio equalizer
 * Wear OS companion app
 * Home screen widget
-* Advanced playlist management
+* Lyrics support
 
 ---
 
