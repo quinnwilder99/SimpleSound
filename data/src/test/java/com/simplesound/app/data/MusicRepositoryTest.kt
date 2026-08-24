@@ -92,6 +92,12 @@ class MusicRepositoryTest {
     fun `createPlaylist persists playlist and track order to room`() =
         runTest {
             val id = repository.createPlaylist("Gym", trackIds = listOf(5L, 6L))
+            // createPlaylist's Room write is fire-and-forget on the repository's
+            // background scope (see its class doc) -- without this, the Flow below
+            // can emit its initial (still-empty) snapshot before that write lands,
+            // which is exactly the kind of race a fast local machine usually wins
+            // and a loaded CI runner sometimes doesn't.
+            repository.awaitPendingWrites()
             db.playlistTrackDao().observeForPlaylist(id).test {
                 val refs = awaitItem()
                 assertEquals(listOf(5L, 6L), refs.sortedBy { it.position }.map { it.trackId })
