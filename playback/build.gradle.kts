@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.ksp)
+    alias(libs.plugins.hilt)
 }
 
 android {
@@ -30,6 +32,11 @@ dependencies {
     implementation(libs.androidx.media3.common)
     implementation(libs.androidx.media3.datasource)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Hilt - PlayerController is a constructor-injected singleton; this module
+    // needs its own Hilt annotation processing pass (multi-module Hilt).
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
     // ---- Testing ----
     testImplementation(libs.junit)

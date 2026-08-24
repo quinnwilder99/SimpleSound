@@ -1,0 +1,26 @@
+# Overrides on top of detekt's default ruleset (buildUponDefaultConfig = true in
+# the root build.gradle.kts). Everything not listed here uses detekt's defaults;
+# pre-existing findings outside these overrides are grandfathered per-module via
+# config/detekt/baseline-<module>.xml rather than tuned away here.
+
+naming:
+  FunctionNaming:
+    # @Composable functions are PascalCase by convention; @Test functions here use
+    # backtick-quoted, space-separated names for readability.
+    ignoreAnnotated: ['Composable', 'Test']
+
+style:
+  MagicNumber:
+    # Compose UI is built almost entirely out of "meaningful" numeric literals
+    # (padding/size in .dp, alpha, font weights, grid spans) — flagging every one
+    # is pure noise in this codebase.
+    active: false
+  MaxLineLength:
+    maxLineLength: 120
+
+complexity:
+  TooManyFunctions:
+    # MusicRepository and AppViewModel are deliberately single facade classes over
+    # the whole library/settings surface (see their class docs) rather than being
+    # split for its own sake.
+    active: false

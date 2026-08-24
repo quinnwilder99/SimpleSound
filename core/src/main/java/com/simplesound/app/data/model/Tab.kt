@@ -11,13 +11,15 @@ enum class Tab(val label: String, val route: String) {
     PLAYLISTS("Playlists", "playlists"),
     ALBUMS("Albums", "albums"),
     ARTISTS("Artists", "artists"),
-    FOLDERS("Folders", "folders");
+    FOLDERS("Folders", "folders"),
+    ;
 
     /** Tracks is mandatory and cannot be disabled. */
     val isMandatory: Boolean get() = this == TRACKS
 
     companion object {
         val Default: List<Tab> = listOf(FAVORITES, TRACKS, PLAYLISTS, ALBUMS, ARTISTS, FOLDERS)
+
         fun fromName(name: String): Tab? = entries.firstOrNull { it.name == name }
     }
 }

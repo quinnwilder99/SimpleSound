@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ReturnCount:PlaybackService.kt$PlaybackService$private fun maybeStartCrossfade()</ID>
+    <ID>ReturnCount:PlayerController.kt$PlayerController$private fun maybePrepareRestoredTrack()</ID>
+    <ID>SwallowedException:TrackArtworkBitmapLoader.kt$TrackArtworkBitmapLoader$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:TrackArtworkBitmapLoader.kt$TrackArtworkBitmapLoader$e: Throwable</ID>
+  </CurrentIssues>
+</SmellBaseline>

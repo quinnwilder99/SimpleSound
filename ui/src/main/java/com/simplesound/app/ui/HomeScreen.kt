@@ -17,9 +17,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -58,7 +58,10 @@ import com.simplesound.app.ui.screens.tracks.TracksScreen
 import kotlinx.coroutines.launch
 
 @Composable
-fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
+fun HomeScreen(
+    vm: AppViewModel,
+    navController: NavHostController,
+) {
     val tabSettings by vm.tabSettings.collectAsStateWithLifecycle()
     val enabledTabs = remember(tabSettings) { tabSettings.filter { it.enabled }.map { it.tab } }
 
@@ -68,13 +71,15 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
     val pagerState = rememberPagerState(pageCount = { enabledTabs.size })
     val scope = rememberCoroutineScope()
 
-    val firstTabIndex = remember(enabledTabs) {
-        enabledTabs.indexOfFirst { it == Tab.TRACKS }.takeIf { it >= 0 } ?: 0
-    }
+    val firstTabIndex =
+        remember(enabledTabs) {
+            enabledTabs.indexOfFirst { it == Tab.TRACKS }.takeIf { it >= 0 } ?: 0
+        }
 
-    val selectedTab = enabledTabs.getOrNull(pagerState.currentPage)
-        ?: enabledTabs.getOrNull(firstTabIndex)
-        ?: Tab.TRACKS
+    val selectedTab =
+        enabledTabs.getOrNull(pagerState.currentPage)
+            ?: enabledTabs.getOrNull(firstTabIndex)
+            ?: Tab.TRACKS
 
     // --- Center the active tab label within the horizontally scrollable tab row ---
     // The tab row scrolls independently of the pager. Rather than waiting for the pager
@@ -92,14 +97,14 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
     // The active label changes width when emphasized, which legitimately updates its
     // measured width and re-centers to the exact final position.
     val tabScrollState = rememberScrollState()
-    val rowViewportPx = remember { mutableIntStateOf(0) }     // visible viewport width (px)
+    val rowViewportPx = remember { mutableIntStateOf(0) } // visible viewport width (px)
     // index -> measured width (px) of each tab label. Scroll-independent.
     val tabWidths = remember(enabledTabs) { mutableStateMapOf<Int, Int>() }
 
     // Density-aware conversions for the fixed row padding (16.dp) and tab spacing (20.dp),
     // computed once from the current density.
-    val hPaddingPx = with(LocalDensity.current) { 16.dp.roundToPx() }   // per-side horizontal padding
-    val spacingPx = with(LocalDensity.current) { 20.dp.roundToPx() }    // gap between tabs
+    val hPaddingPx = with(LocalDensity.current) { 16.dp.roundToPx() } // per-side horizontal padding
+    val spacingPx = with(LocalDensity.current) { 20.dp.roundToPx() } // gap between tabs
 
     // Continuous page position (e.g. 1.35 while 35% swiped from page 1 towards page 2).
     // Reading currentPage/currentPageOffsetFraction directly in composition means this
@@ -139,12 +144,13 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
 
             val neighbor = page + if (offsetFraction >= 0f) 1 else -1
             val currentCenter = centerOf(page)
-            val blendedCenter = if (neighbor in widths.indices) {
-                val neighborCenter = centerOf(neighbor)
-                currentCenter + ((neighborCenter - currentCenter) * kotlin.math.abs(offsetFraction)).toInt()
-            } else {
-                currentCenter
-            }
+            val blendedCenter =
+                if (neighbor in widths.indices) {
+                    val neighborCenter = centerOf(neighbor)
+                    currentCenter + ((neighborCenter - currentCenter) * kotlin.math.abs(offsetFraction)).toInt()
+                } else {
+                    currentCenter
+                }
             val target = (blendedCenter - viewport / 2).coerceIn(0, tabScrollState.maxValue)
             // A direct (non-animated) scrollTo, called every frame the pager moves, IS the
             // animation — it rides the pager's own motion rather than racing a separate
@@ -156,19 +162,19 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
     Box(Modifier.fillMaxSize()) {
         GlowBackground(accent = MaterialTheme.colorScheme.primary)
         Scaffold(
-            containerColor = Color.Transparent
+            containerColor = Color.Transparent,
         ) { inner ->
             Column(Modifier.padding(inner).fillMaxSize()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = "Simple Sound",
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold,
-                        fontFamily = FontFamily.SansSerif
+                        fontFamily = FontFamily.SansSerif,
                     )
                     Spacer(Modifier.weight(1f))
                     if (selectedTab == Tab.PLAYLISTS) {
@@ -185,23 +191,24 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
                 }
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onGloballyPositioned { coords ->
-                            // The viewport width (the on-screen width of the scrollable row) is
-                            // what we center the selected label within. This MUST be measured
-                            // here, before .horizontalScroll(), because inside a scrollable
-                            // container the child is measured with unbounded width — placing
-                            // onGloballyPositioned after horizontalScroll (as before) captured
-                            // the row's unconstrained *content* width (sum of all tab widths),
-                            // not the actual visible screen width, which threw off the centering
-                            // math below.
-                            rowViewportPx.intValue = coords.size.width
-                        }
-                        .horizontalScroll(tabScrollState)
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .onGloballyPositioned { coords ->
+                                // The viewport width (the on-screen width of the scrollable row) is
+                                // what we center the selected label within. This MUST be measured
+                                // here, before .horizontalScroll(), because inside a scrollable
+                                // container the child is measured with unbounded width — placing
+                                // onGloballyPositioned after horizontalScroll (as before) captured
+                                // the row's unconstrained *content* width (sum of all tab widths),
+                                // not the actual visible screen width, which threw off the centering
+                                // math below.
+                                rowViewportPx.intValue = coords.size.width
+                            }
+                            .horizontalScroll(tabScrollState)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     enabledTabs.forEachIndexed { index, tab ->
                         // How "selected" this tab looks right now: 1 at pageProgress == index,
@@ -212,50 +219,59 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
                         val emphasis = (1f - kotlin.math.abs(pageProgress - index)).coerceIn(0f, 1f)
                         Text(
                             text = tab.label,
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontSize = androidx.compose.ui.unit.lerp(
-                                    MaterialTheme.typography.titleLarge.fontSize,
-                                    MaterialTheme.typography.headlineLarge.fontSize,
-                                    emphasis
-                                )
-                            ),
-                            color = androidx.compose.ui.graphics.lerp(
-                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                MaterialTheme.colorScheme.primary,
-                                emphasis
-                            ),
-                            fontWeight = androidx.compose.ui.text.font.lerp(
-                                FontWeight.Normal,
-                                FontWeight.Bold,
-                                emphasis
-                            ),
-                            modifier = Modifier
-                                .onGloballyPositioned { coords ->
-                                    // Record this tab's FULL outer footprint (incl. its inner
-                                    // padding) so the content-offset sum matches how the row
-                                    // actually lays tabs out. Width is scroll-independent, so
-                                    // animating the row never re-triggers the centering math.
-                                    val w = coords.size.width
-                                    if (w > 0 && tabWidths[index] != w) tabWidths[index] = w
-                                }
-                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                                .clickable {
-                                    scope.launch { pagerState.animateScrollToPage(index) }
-                                }
-                                .padding(vertical = 4.dp, horizontal = 2.dp)
+                            style =
+                                MaterialTheme.typography.titleLarge.copy(
+                                    fontSize =
+                                        androidx.compose.ui.unit.lerp(
+                                            MaterialTheme.typography.titleLarge.fontSize,
+                                            MaterialTheme.typography.headlineLarge.fontSize,
+                                            emphasis,
+                                        ),
+                                ),
+                            color =
+                                androidx.compose.ui.graphics.lerp(
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                    MaterialTheme.colorScheme.primary,
+                                    emphasis,
+                                ),
+                            fontWeight =
+                                androidx.compose.ui.text.font.lerp(
+                                    FontWeight.Normal,
+                                    FontWeight.Bold,
+                                    emphasis,
+                                ),
+                            modifier =
+                                Modifier
+                                    .onGloballyPositioned { coords ->
+                                        // Record this tab's FULL outer footprint (incl. its inner
+                                        // padding) so the content-offset sum matches how the row
+                                        // actually lays tabs out. Width is scroll-independent, so
+                                        // animating the row never re-triggers the centering math.
+                                        val w = coords.size.width
+                                        if (w > 0 && tabWidths[index] != w) tabWidths[index] = w
+                                    }
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        scope.launch { pagerState.animateScrollToPage(index) }
+                                    }
+                                    .padding(vertical = 4.dp, horizontal = 2.dp),
                         )
                     }
                 }
 
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
                 ) { page ->
                     val tab = enabledTabs.getOrNull(page) ?: Tab.TRACKS
                     Box(Modifier.fillMaxSize()) {
                         when (tab) {
                             Tab.FAVORITES -> FavoritesScreen(vm, navController)
-                            Tab.TRACKS -> TracksScreen(vm, onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) })
+                            Tab.TRACKS ->
+                                TracksScreen(
+                                    vm,
+                                    onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) },
+                                )
                             Tab.PLAYLISTS -> PlaylistsScreen(vm, navController)
                             Tab.ALBUMS -> AlbumsScreen(vm)
                             Tab.ARTISTS -> ArtistsScreen(vm)
@@ -272,7 +288,7 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
                     vm.createPlaylist(name)
                     showCreatePlaylist = false
                 },
-                onDismiss = { showCreatePlaylist = false }
+                onDismiss = { showCreatePlaylist = false },
             )
         }
     }
@@ -284,7 +300,10 @@ fun HomeScreen(vm: AppViewModel, navController: NavHostController) {
  * default behavior.
  */
 @Composable
-private fun CreatePlaylistDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+private fun CreatePlaylistDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
     var name by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -294,7 +313,7 @@ private fun CreatePlaylistDialog(onConfirm: (String) -> Unit, onDismiss: () -> U
                 value = name,
                 onValueChange = { name = it },
                 singleLine = true,
-                label = { Text("Playlist name") }
+                label = { Text("Playlist name") },
             )
         },
         confirmButton = {
@@ -304,6 +323,6 @@ private fun CreatePlaylistDialog(onConfirm: (String) -> Unit, onDismiss: () -> U
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+        },
     )
 }

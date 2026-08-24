@@ -3,7 +3,6 @@
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -40,7 +39,10 @@ private val TRACKS_TAB_SORT_OPTIONS = SortOption.entries.filterNot { it == SortO
 
 /** All tracks, sortable by date added / name / artist / length. */
 @Composable
-fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
+fun TracksScreen(
+    vm: AppViewModel,
+    onOpenNowPlaying: () -> Unit = {},
+) {
     val player = LocalPlayer.current
     val context = LocalContext.current
     val allTracks by vm.tracks.collectAsStateWithLifecycle()
@@ -62,26 +64,31 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
     var showAddMany by remember { mutableStateOf(false) }
     var showDeleteMany by remember { mutableStateOf(false) }
 
-    val selectedTracks: List<Track> = remember(selectedIds, sorted) {
-        val byId = sorted.associateBy { it.id }
-        selectedIds.mapNotNull { byId[it] }
-    }
+    val selectedTracks: List<Track> =
+        remember(selectedIds, sorted) {
+            val byId = sorted.associateBy { it.id }
+            selectedIds.mapNotNull { byId[it] }
+        }
 
     fun toggleSelected(id: Long) {
         selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
     }
-    fun clearSelection() { selectedIds = emptySet() }
+
+    fun clearSelection() {
+        selectedIds = emptySet()
+    }
 
     // Temporarily hide the global persistent mini player while the bottom
     // selection action bar or any modal sheet/dialog is open, so it can't
     // overlay and intercept touches over them. Mirrors SearchScreen.
-    val anyOverlayOpen = selectionMode ||
-        sheetTrack != null ||
-        addTrack != null ||
-        deleteTrack != null ||
-        detailsTrack != null ||
-        showAddMany ||
-        showDeleteMany
+    val anyOverlayOpen =
+        selectionMode ||
+            sheetTrack != null ||
+            addTrack != null ||
+            deleteTrack != null ||
+            detailsTrack != null ||
+            showAddMany ||
+            showDeleteMany
     LaunchedEffect(anyOverlayOpen) {
         vm.setMiniPlayerHidden(anyOverlayOpen)
     }
@@ -100,7 +107,7 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
                 onPlayAll = { player.playQueue(sorted, 0, "All tracks") },
                 // No playlist context here, so Custom order (which needs one)
                 // isn't offered — see SortHeader's `options` doc comment.
-                options = TRACKS_TAB_SORT_OPTIONS
+                options = TRACKS_TAB_SORT_OPTIONS,
             )
             LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 160.dp)) {
                 items(sorted, key = { it.id }) { track ->
@@ -118,7 +125,7 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
                                 onOpenNowPlaying()
                             }
                         },
-                        onMore = { sheetTrack = track }
+                        onMore = { sheetTrack = track },
                     )
                 }
             }
@@ -138,7 +145,7 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
             onAdd = { showAddMany = true },
             onDelete = { showDeleteMany = true },
             onClear = { clearSelection() },
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
 
@@ -147,29 +154,45 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
         TrackActionsSheet(
             track = t,
             isFavorite = t.id in favoriteIds,
-            onPlay = { player.playSingle(t) }, // playSingle already labels as "Queue"
+            // playSingle already labels as "Queue"
+            onPlay = { player.playSingle(t) },
             onToggleFavorite = { vm.toggleFavoriteTrack(t.id) },
-            onAddToPlaylist = { addTrack = t; sheetTrack = null },
-            onDelete = { deleteTrack = t; sheetTrack = null },
+            onAddToPlaylist = {
+                addTrack = t
+                sheetTrack = null
+            },
+            onDelete = {
+                deleteTrack = t
+                sheetTrack = null
+            },
             onShare = { shareTrack(context, t) },
-            onDetails = { detailsTrack = t; sheetTrack = null },
-            onDismiss = { sheetTrack = null }
+            onDetails = {
+                detailsTrack = t
+                sheetTrack = null
+            },
+            onDismiss = { sheetTrack = null },
         )
     }
 
     addTrack?.let { t ->
         AddToPlaylistDialog(
             playlists = userPlaylists,
-            onPick = { pl -> vm.addTracksToPlaylist(pl.id, listOf(t.id)); addTrack = null },
-            onDismiss = { addTrack = null }
+            onPick = { pl ->
+                vm.addTracksToPlaylist(pl.id, listOf(t.id))
+                addTrack = null
+            },
+            onDismiss = { addTrack = null },
         )
     }
 
     deleteTrack?.let { t ->
         DeleteTrackDialog(
             track = t,
-            onConfirm = { vm.deleteTrack(t.id); deleteTrack = null },
-            onDismiss = { deleteTrack = null }
+            onConfirm = {
+                vm.deleteTrack(t.id)
+                deleteTrack = null
+            },
+            onDismiss = { deleteTrack = null },
         )
     }
 
@@ -192,7 +215,7 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
                 clearSelection()
                 showAddMany = false
             },
-            onDismiss = { showAddMany = false }
+            onDismiss = { showAddMany = false },
         )
     }
 
@@ -204,7 +227,7 @@ fun TracksScreen(vm: AppViewModel, onOpenNowPlaying: () -> Unit = {}) {
                 clearSelection()
                 showDeleteMany = false
             },
-            onDismiss = { showDeleteMany = false }
+            onDismiss = { showDeleteMany = false },
         )
     }
 }

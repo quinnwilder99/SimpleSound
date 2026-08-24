@@ -24,7 +24,7 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
     }
@@ -74,10 +74,16 @@ dependencies {
     // SimpleSoundApp for album art and the static PNG fallback.
     implementation(libs.coil.compose)
 
-    // Hilt - dependency injection (configured for future use; not yet annotated in source).
+    // Hilt - dependency injection for SimpleSoundApp/MainActivity (SimpleSoundApp is
+    // @HiltAndroidApp; MainActivity is @AndroidEntryPoint).
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    // WorkManager - SimpleSoundApp implements Configuration.Provider to hand
+    // WorkManager a HiltWorkerFactory (see data/sync/LibrarySyncWorker.kt).
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
 
     // ---- Testing ----
     testImplementation(libs.junit)

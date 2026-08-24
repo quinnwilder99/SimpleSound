@@ -21,8 +21,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistAdd
-import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -51,31 +51,38 @@ fun SelectionActionBar(
     onAdd: () -> Unit,
     onDelete: () -> Unit,
     onClear: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
         visible = selectedCount > 0,
         enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-        modifier = modifier
+        modifier = modifier,
     ) {
         Card(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("$selectedCount", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+                Text(
+                    "$selectedCount",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp),
+                )
                 Spacer(Modifier.width(8.dp))
                 BarAction(Icons.Rounded.PlayArrow, "Play", onPlay)
                 BarAction(Icons.Rounded.PlaylistAdd, "Add", onAdd)
                 BarAction(Icons.Rounded.Delete, "Delete", onDelete, destructive = true)
                 Spacer(Modifier.width(4.dp))
-                IconButton(onClick = onClear) { Icon(Icons.Rounded.Close, "Clear selection", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                IconButton(onClick = onClear) {
+                    Icon(Icons.Rounded.Close, "Clear selection", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
@@ -100,29 +107,29 @@ fun PlaylistSelectionActionBar(
     onRemove: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
-    shareEnabled: Boolean = false
+    shareEnabled: Boolean = false,
 ) {
     AnimatedVisibility(
         visible = selectedCount > 0,
         enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-        modifier = modifier
+        modifier = modifier,
     ) {
         Card(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     "$selectedCount",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 12.dp)
+                    modifier = Modifier.padding(start = 12.dp),
                 )
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onPlay) {
@@ -133,12 +140,24 @@ fun PlaylistSelectionActionBar(
                 }
                 IconButton(onClick = onShare, enabled = shareEnabled) {
                     Icon(
-                        Icons.Rounded.Share, "Share",
-                        tint = if (shareEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        Icons.Rounded.Share,
+                        "Share",
+                        tint =
+                            if (shareEnabled) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                    alpha = 0.4f,
+                                )
+                            },
                     )
                 }
                 IconButton(onClick = onRemove) {
-                    Icon(Icons.Rounded.RemoveCircleOutline, "Remove from playlist", tint = MaterialTheme.colorScheme.error)
+                    Icon(
+                        Icons.Rounded.RemoveCircleOutline,
+                        "Remove from playlist",
+                        tint = MaterialTheme.colorScheme.error,
+                    )
                 }
                 IconButton(onClick = onClear) {
                     Icon(Icons.Rounded.Close, "Clear selection", tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -154,16 +173,20 @@ private fun BarAction(
     label: String,
     onClick: () -> Unit,
     destructive: Boolean = false,
-    enabled: Boolean = true
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         val tint = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
         Icon(icon, label, tint = tint, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(6.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -173,7 +196,7 @@ fun AddTracksToPlaylistDialog(
     pickedCount: Int,
     onAddToExisting: (Playlist) -> Unit,
     onCreateNew: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     var newMode by remember { mutableStateOf(playlists.isEmpty()) }
     var newName by remember { mutableStateOf("") }
@@ -181,7 +204,9 @@ fun AddTracksToPlaylistDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             if (newMode) {
-                TextButton(onClick = { if (newName.isNotBlank()) onCreateNew(newName.trim()) }, enabled = newName.isNotBlank()) { Text("Create & add") }
+                TextButton(onClick = {
+                    if (newName.isNotBlank()) onCreateNew(newName.trim())
+                }, enabled = newName.isNotBlank()) { Text("Create & add") }
             } else {
                 TextButton(onClick = { newMode = true }) { Text("New playlist") }
             }
@@ -190,37 +215,61 @@ fun AddTracksToPlaylistDialog(
         title = { Text("Add " + pickedCount + " track" + (if (pickedCount == 1) "" else "s") + " to playlist") },
         text = {
             if (newMode) {
-                OutlinedTextField(value = newName, onValueChange = { newName = it }, singleLine = true, label = { Text("Playlist name") })
+                OutlinedTextField(value = newName, onValueChange = {
+                    newName = it
+                }, singleLine = true, label = { Text("Playlist name") })
             } else if (playlists.isEmpty()) {
                 Column {
                     Text("No playlists yet. Create one to add these tracks.")
                     Spacer(Modifier.size(8.dp))
-                    OutlinedTextField(value = newName, onValueChange = { newName = it }, singleLine = true, label = { Text("Playlist name") })
+                    OutlinedTextField(value = newName, onValueChange = {
+                        newName = it
+                    }, singleLine = true, label = { Text("Playlist name") })
                 }
             } else {
                 LazyColumn {
                     items(playlists) { pl ->
-                        Row(Modifier.fillMaxWidth().clickable { onAddToExisting(pl) }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                onAddToExisting(pl)
+                            }.padding(vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Column(Modifier.weight(1f)) {
-                                Text(pl.name, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-                                Text(trackCountLabel(pl.trackCount), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    pl.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                )
+                                Text(
+                                    trackCountLabel(pl.trackCount),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
                 }
             }
-        }
+        },
     )
 }
 
 @Composable
-fun DeleteTracksDialog(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun DeleteTracksDialog(
+    count: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onConfirm) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         title = { Text("Delete tracks") },
-        text = { Text("Permanently delete " + count + " track" + (if (count == 1) "" else "s") + " from your library? This cannot be undone.") }
+        text = {
+            val trackWord = if (count == 1) "track" else "tracks"
+            Text("Permanently delete $count $trackWord from your library? This cannot be undone.")
+        },
     )
 }
 
@@ -230,12 +279,19 @@ fun DeleteTracksDialog(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit)
  * remain in the library.
  */
 @Composable
-fun RemoveTracksDialog(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun RemoveTracksDialog(
+    count: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onConfirm) { Text("Remove", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         title = { Text("Remove from playlist") },
-        text = { Text("Remove " + count + " track" + (if (count == 1) "" else "s") + " from this playlist? The tracks will stay in your library.") }
+        text = {
+            val trackWord = if (count == 1) "track" else "tracks"
+            Text("Remove $count $trackWord from this playlist? The tracks will stay in your library.")
+        },
     )
 }

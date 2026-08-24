@@ -46,29 +46,37 @@ fun SortHeader(
     // a per-playlist saved order — see MusicRepository.sortPlaylistTracks); the
     // Tracks tab has no playlist context to hang a custom order off of, so it
     // must pass a restricted list here rather than default to every SortOption.
-    options: List<SortOption> = SortOption.entries
+    options: List<SortOption> = SortOption.entries,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clip(MaterialTheme.shapes.small).clickable { expanded = true }
-                .padding(6.dp)
+            modifier =
+                Modifier.clip(MaterialTheme.shapes.small).clickable { expanded = true }
+                    .padding(6.dp),
         ) {
             Icon(Icons.Rounded.SwapVert, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(8.dp))
-            Text(current.label, style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground)
+            Text(
+                current.label,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 options.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(option.label) },
-                        onClick = { onSort(option); expanded = false }
+                        onClick = {
+                            onSort(option)
+                            expanded = false
+                        },
                     )
                 }
             }
@@ -85,23 +93,24 @@ private fun CircleIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     desc: String,
     onClick: () -> Unit,
-    filled: Boolean = false
+    filled: Boolean = false,
 ) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
         color = if (filled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.size(40.dp)
+        modifier = Modifier.size(40.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                icon, desc,
+                icon,
+                desc,
                 tint = if (filled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(22.dp),
             )
         }
     }

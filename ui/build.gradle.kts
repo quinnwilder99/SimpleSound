@@ -2,6 +2,8 @@
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.ksp)
+    alias(libs.plugins.hilt)
 }
 
 android {
@@ -52,6 +54,11 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.reorderable)
 
+    // Hilt - AppViewModel is a @HiltViewModel; this module needs its own Hilt
+    // annotation processing pass (multi-module Hilt).
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+
     // ---- Testing ----
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
@@ -63,5 +70,10 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     androidTestImplementation(libs.androidx.ui.test.manifest)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    // Compose UI tests build a real AppViewModel backed by a real SettingsStore
+    // and an in-memory Room MusicRepository (not mocks), so they need Room here too.
+    androidTestImplementation(libs.androidx.room.runtime)
+    androidTestImplementation(libs.androidx.room.ktx)
     debugImplementation(libs.androidx.ui.test.manifest)
 }

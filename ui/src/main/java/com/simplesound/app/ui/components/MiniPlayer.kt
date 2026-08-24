@@ -51,7 +51,10 @@ import com.simplesound.app.ui.LocalPlayer
  * anywhere else on the bar opens the full Now Playing screen for that track.
  */
 @Composable
-fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
+fun MiniPlayer(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
+) {
     val player = LocalPlayer.current
     val track by player.currentTrack.collectAsStateWithLifecycle()
     val lastPlayed by player.lastPlayedTrack.collectAsStateWithLifecycle()
@@ -80,35 +83,37 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
     val progressTint = MaterialTheme.colorScheme.primary
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 10.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(glassTint.copy(alpha = 1.0f))
-            // Specular top highlight: a thin bright band along the upper rim
-            // that sells the "liquid" sheen, fading to transparent at mid-height.
-            .drawBehind {
-                val h = size.height
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(glassHighlight, Color.Transparent),
-                        startY = 0f,
-                        endY = h * 0.5f
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(glassTint.copy(alpha = 1.0f))
+                // Specular top highlight: a thin bright band along the upper rim
+                // that sells the "liquid" sheen, fading to transparent at mid-height.
+                .drawBehind {
+                    val h = size.height
+                    drawRect(
+                        brush =
+                            Brush.verticalGradient(
+                                colors = listOf(glassHighlight, Color.Transparent),
+                                startY = 0f,
+                                endY = h * 0.5f,
+                            ),
                     )
+                }
+                // Glass rim: bright at the top, nearly invisible at the bottom — the
+                // signature edge light of a glass capsule.
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(colors = listOf(glassEdge, glassEdgeBottom)),
+                    shape = RoundedCornerShape(28.dp),
                 )
-            }
-            // Glass rim: bright at the top, nearly invisible at the bottom — the
-            // signature edge light of a glass capsule.
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(colors = listOf(glassEdge, glassEdgeBottom)),
-                shape = RoundedCornerShape(28.dp)
-            )
-            .clickable { onClick() }
+                .clickable { onClick() },
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             // embeddedSource = display.uri so Artwork decodes the per-track
             // embedded picture (ID3 APIC) first, same order TrackRow/NowPlaying
@@ -117,7 +122,7 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
                 uri = display.albumArtUri,
                 embeddedSource = display.uri,
                 modifier = Modifier.size(44.dp),
-                corner = 10.dp
+                corner = 10.dp,
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -126,14 +131,14 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
                     style = MaterialTheme.typography.titleMedium,
                     color = textTint,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = display.artistOrUnknown,
                     style = MaterialTheme.typography.bodySmall,
                     color = subTextTint,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             // Transport controls: reverse (previous), play/stop (toggle), skip (next).
@@ -144,7 +149,7 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
                 Icon(
                     if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = iconTint
+                    tint = iconTint,
                 )
             }
             IconButton(onClick = { player.next() }) {
@@ -157,18 +162,20 @@ fun MiniPlayer(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
         // before the first track ever loads.
         if (durationMs > 0) {
             Box(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .height(2.5.dp)
-                    .background(Color.White.copy(alpha = 0.12f))
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(2.5.dp)
+                        .background(Color.White.copy(alpha = 0.12f)),
             )
             Box(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth(progress)
-                    .height(2.5.dp)
-                    .background(progressTint)
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(progress)
+                        .height(2.5.dp)
+                        .background(progressTint),
             )
         }
     }

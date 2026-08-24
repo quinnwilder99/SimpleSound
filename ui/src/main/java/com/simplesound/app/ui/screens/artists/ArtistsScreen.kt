@@ -33,31 +33,39 @@ import com.simplesound.app.util.trackCountLabel
 fun ArtistsScreen(vm: AppViewModel) {
     val player = LocalPlayer.current
     val tracks by vm.tracks.collectAsStateWithLifecycle()
-    val artists = remember(tracks) {
-        tracks.groupBy { it.artistOrUnknown }.toList().sortedBy { it.first.lowercase() }
-    }
+    val artists =
+        remember(tracks) {
+            tracks.groupBy { it.artistOrUnknown }.toList().sortedBy { it.first.lowercase() }
+        }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
         items(artists, key = { it.first }) { (artist, list) ->
             Row(
                 Modifier.fillMaxWidth().clickable { player.playQueue(list, 0) }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
                 CircleGlyph(Icons.Rounded.Person, Modifier.size(52.dp))
                 Spacer(Modifier.width(16.dp))
                 Text(
-                    artist, style = MaterialTheme.typography.bodyLarge,
+                    artist,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
                 Text(
-                    trackCountLabel(list.size), style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    trackCountLabel(list.size),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline, thickness = 0.5.dp,
-                modifier = Modifier.padding(start = 84.dp))
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(start = 84.dp),
+            )
         }
     }
 }

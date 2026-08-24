@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.simplesound.app.ui.components.liquidGlass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -30,6 +29,7 @@ import androidx.navigation.NavHostController
 import com.simplesound.app.data.model.Playlist
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.components.Artwork
+import com.simplesound.app.ui.components.liquidGlass
 import com.simplesound.app.ui.navigation.Routes
 import com.simplesound.app.util.trackCountLabel
 
@@ -38,7 +38,10 @@ import com.simplesound.app.util.trackCountLabel
  * played, Favorite tracks) as large cards up top, then every user playlist below.
  */
 @Composable
-fun PlaylistsScreen(vm: AppViewModel, navController: NavHostController) {
+fun PlaylistsScreen(
+    vm: AppViewModel,
+    navController: NavHostController,
+) {
     val userPlaylists by vm.userPlaylists.collectAsStateWithLifecycle()
     // nativePlaylists() is a plain (non-flow) snapshot computed from the live
     // track list, so it must be re-derived whenever tracks or favorites change
@@ -52,20 +55,20 @@ fun PlaylistsScreen(vm: AppViewModel, navController: NavHostController) {
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 96.dp)
+        contentPadding = PaddingValues(bottom = 96.dp),
     ) {
         item {
             Text(
                 "Custom order",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
             )
         }
         item {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 items(native, key = { it.id }) { pl ->
                     NativePlaylistCard(pl) { navController.navigate(Routes.playlist(pl.id)) }
@@ -80,17 +83,21 @@ fun PlaylistsScreen(vm: AppViewModel, navController: NavHostController) {
 }
 
 @Composable
-private fun NativePlaylistCard(playlist: Playlist, onClick: () -> Unit) {
+private fun NativePlaylistCard(
+    playlist: Playlist,
+    onClick: () -> Unit,
+) {
     Column(
-        modifier = Modifier
-            .width(150.dp)
-            // Small fixed row (the four native playlists) — keep a rim for
-            // definition but skip the gloss so four cards side by side don't
-            // each throw their own highlight.
-            .liquidGlass(corner = 22.dp, bodyAlpha = 0.07f, showGloss = false)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier =
+            Modifier
+                .width(150.dp)
+                // Small fixed row (the four native playlists) — keep a rim for
+                // definition but skip the gloss so four cards side by side don't
+                // each throw their own highlight.
+                .liquidGlass(corner = 22.dp, bodyAlpha = 0.07f, showGloss = false)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Artwork(uri = playlist.coverUri, modifier = Modifier.size(146.dp), corner = 16.dp, iconSize = 54.dp)
         Text(
@@ -100,29 +107,33 @@ private fun NativePlaylistCard(playlist: Playlist, onClick: () -> Unit) {
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 10.dp)
+            modifier = Modifier.padding(top = 10.dp),
         )
         Text(
             trackCountLabel(playlist.trackCount),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
 @Composable
-private fun UserPlaylistRow(playlist: Playlist, onClick: () -> Unit) {
+private fun UserPlaylistRow(
+    playlist: Playlist,
+    onClick: () -> Unit,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp)
-            // One of these per user playlist, stacked in a LazyColumn — a full
-            // gloss+rim per row would read as a stack of glass tiles rather
-            // than a list. Keep it to a quiet flat wash instead.
-            .liquidGlass(corner = 20.dp, bodyAlpha = 0.05f, showGloss = false, showRim = false)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+                // One of these per user playlist, stacked in a LazyColumn — a full
+                // gloss+rim per row would read as a stack of glass tiles rather
+                // than a list. Keep it to a quiet flat wash instead.
+                .liquidGlass(corner = 20.dp, bodyAlpha = 0.05f, showGloss = false, showRim = false)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Artwork(uri = playlist.coverUri, modifier = Modifier.size(56.dp))
         Spacer(Modifier.width(16.dp))
@@ -132,12 +143,12 @@ private fun UserPlaylistRow(playlist: Playlist, onClick: () -> Unit) {
             color = MaterialTheme.colorScheme.onBackground,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         Text(
             trackCountLabel(playlist.trackCount),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

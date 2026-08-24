@@ -15,12 +15,16 @@ import androidx.compose.ui.unit.dp
 
 /** A rounded surface tile with a centered icon — used for artist/folder rows. */
 @Composable
-fun CircleGlyph(icon: ImageVector, modifier: Modifier = Modifier) {
+fun CircleGlyph(
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+) {
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(26.dp))
     }

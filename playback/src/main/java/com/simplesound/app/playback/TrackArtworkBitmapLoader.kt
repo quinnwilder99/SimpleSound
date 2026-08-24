@@ -35,7 +35,6 @@ import java.util.concurrent.Executors
  */
 @UnstableApi
 class TrackArtworkBitmapLoader(private val context: Context) : BitmapLoader {
-
     // Wrapped in CacheBitmapLoader so the album-art fallback path (`loadBitmap`,
     // called directly from `loadBitmapFromMetadata` below) doesn't refetch the same
     // URI on every notification rebuild -- `DefaultMediaNotificationProvider` calls
@@ -47,10 +46,11 @@ class TrackArtworkBitmapLoader(private val context: Context) : BitmapLoader {
     // Tiny cache so rapid track transitions (skip spam, queue reorders) don't
     // re-decode the same embedded picture over and over; bounded and evicts
     // the least-recently-used entry, same pattern as ui/Artwork.kt's LRU.
-    private val cache = object : LinkedHashMap<String, Bitmap?>(CACHE_SIZE, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap?>): Boolean =
-            size > CACHE_SIZE
-    }
+    private val cache =
+        object : LinkedHashMap<String, Bitmap?>(CACHE_SIZE, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap?>): Boolean =
+                size > CACHE_SIZE
+        }
 
     override fun supportsMimeType(mimeType: String): Boolean = delegate.supportsMimeType(mimeType)
 
@@ -81,15 +81,16 @@ class TrackArtworkBitmapLoader(private val context: Context) : BitmapLoader {
             if (cache.containsKey(trackUri)) return cache[trackUri]
         }
         val retriever = MediaMetadataRetriever()
-        val bitmap = try {
-            retriever.setDataSource(context, Uri.parse(trackUri))
-            val bytes = retriever.embeddedPicture
-            bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
-        } catch (e: Throwable) {
-            null
-        } finally {
-            runCatching { retriever.release() }
-        }
+        val bitmap =
+            try {
+                retriever.setDataSource(context, Uri.parse(trackUri))
+                val bytes = retriever.embeddedPicture
+                bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+            } catch (e: Throwable) {
+                null
+            } finally {
+                runCatching { retriever.release() }
+            }
         synchronized(cache) { cache[trackUri] = bitmap }
         return bitmap
     }
@@ -97,8 +98,9 @@ class TrackArtworkBitmapLoader(private val context: Context) : BitmapLoader {
     companion object {
         const val KEY_TRACK_CONTENT_URI = "com.simplesound.app.TRACK_CONTENT_URI"
         private const val CACHE_SIZE = 8
-        private val executor = Executors.newSingleThreadExecutor { r ->
-            Thread(r, "TrackArtworkBitmapLoader").apply { isDaemon = true }
-        }
+        private val executor =
+            Executors.newSingleThreadExecutor { r ->
+                Thread(r, "TrackArtworkBitmapLoader").apply { isDaemon = true }
+            }
     }
 }

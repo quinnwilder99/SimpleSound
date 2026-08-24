@@ -21,7 +21,7 @@ import com.simplesound.core.theme.AccentColor
 @Composable
 fun SimpleSoundTheme(
     accent: AccentColor = AccentColor.Default,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     @Suppress("UNUSED_EXPRESSION")
     isSystemInDarkTheme() // referenced intentionally; result discarded (always dark)
@@ -29,21 +29,22 @@ fun SimpleSoundTheme(
     val accentColor = accent.color
     val onAccent = if (accentColor.luminance() > 0.5f) Color.Black else Color.White
 
-    val colorScheme = darkColorScheme(
-        primary = accentColor,
-        onPrimary = onAccent,
-        primaryContainer = accentColor.copy(alpha = 0.18f),
-        onPrimaryContainer = accentColor,
-        secondary = accentColor,
-        background = SoundColors.Background,
-        onBackground = SoundColors.OnBackground,
-        surface = SoundColors.Surface,
-        onSurface = SoundColors.OnBackground,
-        surfaceVariant = SoundColors.SurfaceVariant,
-        onSurfaceVariant = SoundColors.OnSurfaceMuted,
-        outline = SoundColors.Divider,
-        outlineVariant = SoundColors.Divider
-    )
+    val colorScheme =
+        darkColorScheme(
+            primary = accentColor,
+            onPrimary = onAccent,
+            primaryContainer = accentColor.copy(alpha = 0.18f),
+            onPrimaryContainer = accentColor,
+            secondary = accentColor,
+            background = SoundColors.Background,
+            onBackground = SoundColors.OnBackground,
+            surface = SoundColors.Surface,
+            onSurface = SoundColors.OnBackground,
+            surfaceVariant = SoundColors.SurfaceVariant,
+            onSurfaceVariant = SoundColors.OnSurfaceMuted,
+            outline = SoundColors.Divider,
+            outlineVariant = SoundColors.Divider,
+        )
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -58,6 +59,6 @@ fun SimpleSoundTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = SoundTypography,
-        content = content
+        content = content,
     )
 }

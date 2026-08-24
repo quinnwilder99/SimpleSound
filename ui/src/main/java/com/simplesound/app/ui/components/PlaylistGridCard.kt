@@ -48,43 +48,49 @@ fun PlaylistGridCard(
     shaking: Boolean,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val wobble = if (shaking) {
-        val t = rememberInfiniteTransition(label = "shake")
-        t.animateFloat(
-            initialValue = -1.4f, targetValue = 1.4f,
-            animationSpec = infiniteRepeatable(tween(110, easing = LinearEasing), RepeatMode.Reverse),
-            label = "angle"
-        ).value
-    } else 0f
+    val wobble =
+        if (shaking) {
+            val t = rememberInfiniteTransition(label = "shake")
+            t.animateFloat(
+                initialValue = -1.4f,
+                targetValue = 1.4f,
+                animationSpec = infiniteRepeatable(tween(110, easing = LinearEasing), RepeatMode.Reverse),
+                label = "angle",
+            ).value
+        } else {
+            0f
+        }
 
     Column(
-        modifier = modifier
-            .padding(8.dp)
-            .clip(RoundedCornerShape(20.dp))
-            // Gloss stays — it's what gives the artwork tile a bit of lift — but
-            // the rim is dropped: a hairline around every tile in a 2-column
-            // grid adds up to a lattice of borders that competes with the
-            // artwork itself.
-            .liquidGlass(
-                corner = 20.dp,
-                tint = MaterialTheme.colorScheme.primary,
-                bodyAlpha = 0.10f,
-                showRim = false
-            )
-            .padding(10.dp)
+        modifier =
+            modifier
+                .padding(8.dp)
+                .clip(RoundedCornerShape(20.dp))
+                // Gloss stays — it's what gives the artwork tile a bit of lift — but
+                // the rim is dropped: a hairline around every tile in a 2-column
+                // grid adds up to a lattice of borders that competes with the
+                // artwork itself.
+                .liquidGlass(
+                    corner = 20.dp,
+                    tint = MaterialTheme.colorScheme.primary,
+                    bodyAlpha = 0.10f,
+                    showRim = false,
+                )
+                .padding(10.dp),
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .rotate(wobble)
-                .clip(RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .pointerInput(playlist.id) {
-                    detectTapGestures(onTap = { onClick() }, onLongPress = { onLongPress() })
-                }
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .rotate(wobble)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .pointerInput(playlist.id) {
+                        detectTapGestures(onTap = { onClick() }, onLongPress = { onLongPress() })
+                    },
         ) {
             Artwork(uri = playlist.coverUri, modifier = Modifier.fillMaxSize(), corner = 18.dp, iconSize = 48.dp)
             // Legibility scrim over the artwork.
@@ -94,16 +100,16 @@ fun PlaylistGridCard(
                     .background(
                         Brush.verticalGradient(
                             0f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.32f)
-                        )
-                    )
+                            1f to Color.Black.copy(alpha = 0.32f),
+                        ),
+                    ),
             )
             if (playlist.favorited || playlist.kind != com.simplesound.app.data.model.PlaylistKind.USER) {
                 Icon(
                     Icons.Rounded.Favorite,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp)
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                 )
             }
         }
@@ -115,9 +121,10 @@ fun PlaylistGridCard(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp, start = 4.dp, end = 4.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, start = 4.dp, end = 4.dp),
         )
     }
 }
