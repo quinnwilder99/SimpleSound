@@ -80,10 +80,15 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[Keys.CROSSFADE_SECONDS] = seconds.coerceIn(0, MAX_CROSSFADE_SECONDS) }
     }
 
-    /** The user's last-chosen sort for [playlistId], or [DEFAULT_PLAYLIST_SORT]. */
-    fun playlistSort(playlistId: String): Flow<SortOption> =
+    /**
+     * The user's last-chosen sort for [playlistId], or [default] when the user has
+     * never explicitly sorted this playlist. [default] lets callers seed computed
+     * playlists (e.g. "Most played") with their natural order instead of always
+     * falling back to [DEFAULT_PLAYLIST_SORT].
+     */
+    fun playlistSort(playlistId: String, default: SortOption = DEFAULT_PLAYLIST_SORT): Flow<SortOption> =
         context.dataStore.data.map { prefs ->
-            decodePlaylistSorts(prefs[Keys.PLAYLIST_SORTS])[playlistId] ?: DEFAULT_PLAYLIST_SORT
+            decodePlaylistSorts(prefs[Keys.PLAYLIST_SORTS])[playlistId] ?: default
         }
 
     /** Persist the chosen [option] for [playlistId]. */

@@ -72,9 +72,18 @@ fun PlaylistDetailScreen(
     val context = LocalContext.current
     val player = LocalPlayer.current
 
-    // Re-read from the flows so name/cover/track edits reflect live.
+    // Re-read from the flows so name/cover/track edits reflect live. For a native
+    // (computed) playlist like "Recently played"/"Most played", playlistById()
+    // falls back to re-deriving from the live track list, so tracks/favorites
+    // must be watched here too -- otherwise opening e.g. "Recently played" would
+    // freeze at whatever snapshot existed on first composition and never pick up
+    // tracks played while this screen stays open.
     val userPlaylists by vm.userPlaylists.collectAsStateWithLifecycle()
-    val playlist = remember(userPlaylists, playlistId) { vm.playlistById(playlistId) }
+    val allTracks by vm.tracks.collectAsStateWithLifecycle()
+    val favoriteTrackIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
+    val playlist = remember(userPlaylists, allTracks, favoriteTrackIds, playlistId) {
+        vm.playlistById(playlistId)
+    }
 
     if (playlist == null) { onBack(); return }
     val playlistTracks = vm.tracksByIds(playlist.trackIds)
@@ -85,7 +94,19 @@ fun PlaylistDetailScreen(
     // invoked directly in the composable body — otherwise every recomposition of
     // this screen (selection changes, dialogs opening, etc.) would leak another
     // eager StateFlow collector into the ViewModel's scope for its whole lifetime.
-    val playlistSortFlow = remember(playlistId) { vm.playlistSort(playlistId) }
+    //
+    // "Most played" / "Recently played" arrive from vm.tracksByIds() already in
+    // their meaningful computed order (by play count / last-played time). Unlike
+    // "Recently added" (whose computed order already matches DEFAULT_PLAYLIST_SORT,
+    // i.e. date-added), that order has no matching SortOption, so the default sort
+    // must be CUSTOM_ORDER -- which sortPlaylistTracks() passes through unchanged
+    // when no custom order is saved -- or first open would silently re-sort them
+    // by date-added and hide the very ordering the playlist exists to show.
+    val defaultSort = when (playlist.kind) {
+        PlaylistKind.MOST_PLAYED, PlaylistKind.RECENTLY_PLAYED -> com.simplesound.app.data.model.SortOption.CUSTOM_ORDER
+        else -> com.simplesound.app.data.DEFAULT_PLAYLIST_SORT
+    }
+    val playlistSortFlow = remember(playlistId) { vm.playlistSort(playlistId, defaultSort) }
     val sort by playlistSortFlow.collectAsStateWithLifecycle()
     // Bumped after each custom-order move so the list recomputes from the newly
     // persisted order. (The custom order lives in SharedPreferences, not a flow,

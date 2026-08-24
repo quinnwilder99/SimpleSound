@@ -92,19 +92,26 @@ class AppViewModel(private val settings: SettingsStore) : ViewModel() {
     /**
      * The user's last-chosen sort for a specific playlist (persisted per playlist).
      * The returned [StateFlow] is seeded from [playlistSortCache] when a cached
-     * value exists, falling back to [DEFAULT_PLAYLIST_SORT] only on the very first
-     * open. The cache is kept in sync by [setPlaylistSort] and by collection of
-     * the underlying persisted flow, so subsequent recompositions reuse the
+     * value exists, falling back to [default] only on the very first open. The
+     * cache is kept in sync by [setPlaylistSort] and by collection of the
+     * underlying persisted flow, so subsequent recompositions reuse the
      * last-applied sort instead of resetting to the default.
+     *
+     * [default] lets a computed playlist (e.g. "Most played"/"Recently played")
+     * open sorted by its natural, already-meaningful order ([SortOption.CUSTOM_ORDER],
+     * which [MusicRepository.sortPlaylistTracks] passes through unchanged when no
+     * custom order has been saved) instead of [DEFAULT_PLAYLIST_SORT] — otherwise
+     * "Most played" would render sorted by date-added on first open, silently
+     * discarding the play-count order it exists to show.
      *
      * Each call launches a new eager collector in [viewModelScope] that lives
      * for the ViewModel's lifetime, so callers MUST `remember(playlistId)` the
      * returned flow rather than invoking this directly in a composable body —
      * otherwise every recomposition leaks another collector.
      */
-    fun playlistSort(playlistId: String): StateFlow<SortOption> {
-        val seed = playlistSortCache[playlistId] ?: DEFAULT_PLAYLIST_SORT
-        return settings.playlistSort(playlistId)
+    fun playlistSort(playlistId: String, default: SortOption = DEFAULT_PLAYLIST_SORT): StateFlow<SortOption> {
+        val seed = playlistSortCache[playlistId] ?: default
+        return settings.playlistSort(playlistId, default)
             .onEach { playlistSortCache[playlistId] = it }
             .stateIn(viewModelScope, SharingStarted.Eagerly, seed)
     }

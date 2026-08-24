@@ -12,6 +12,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +48,48 @@ class PlaybackService : MediaSessionService() {
     // same skip) isn't mistaken for a user-initiated skip and doesn't cancel the
     // fade it just started.
     private var suppressNextTransitionCancel = false
+
+    // ---- Play-stats recording ("Recently played" / "Most played") ----
+    // A track only counts as "played" once it has been playing continuously for
+    // PLAY_RECORD_THRESHOLD_MS -- otherwise skimming/skipping through the queue
+    // would spam the Recently played playlist and inflate play counts. Recorded
+    // here (in the service, not PlayerController) so it keeps working while the
+    // app is backgrounded and the Activity's controller is torn down.
+    private var recordPlayRunnable: Runnable? = null
+    private var recordedCurrentItem = false
+
+    private val playRecordListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) scheduleRecordPlay() else cancelScheduledRecordPlay()
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            cancelScheduledRecordPlay()
+            recordedCurrentItem = false
+            if (player.isPlaying) scheduleRecordPlay()
+        }
+    }
+
+    private fun scheduleRecordPlay() {
+        if (recordedCurrentItem) return
+        cancelScheduledRecordPlay()
+        val r = Runnable { recordCurrentItemPlayed() }
+        recordPlayRunnable = r
+        sleepHandler.postDelayed(r, PLAY_RECORD_THRESHOLD_MS)
+    }
+
+    private fun cancelScheduledRecordPlay() {
+        recordPlayRunnable?.let { sleepHandler.removeCallbacks(it) }
+        recordPlayRunnable = null
+    }
+
+    private fun recordCurrentItemPlayed() {
+        recordPlayRunnable = null
+        if (recordedCurrentItem) return
+        val trackId = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
+        recordedCurrentItem = true
+        MusicRepository.recordTrackPlayed(trackId)
+    }
 
     private val crossfadeListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -113,6 +156,7 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
         player.addListener(crossfadeListener)
+        player.addListener(playRecordListener)
         mediaSession = MediaSession.Builder(this, player)
             .setBitmapLoader(TrackArtworkBitmapLoader(this))
             .build()
@@ -327,6 +371,7 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         stopCrossfadeWatcher()
         cancelActiveCrossfade()
+        cancelScheduledRecordPlay()
         serviceScope.cancel()
         mediaSession?.run {
             player.release()
@@ -339,6 +384,9 @@ class PlaybackService : MediaSessionService() {
     companion object {
         private const val SLEEP_PREFS = "simplesound_sleep_timer"
         private const val KEY_DEADLINE_ELAPSED = "deadline_elapsed"
+
+        /** Minimum continuous playback (ms) before a track counts as "played". */
+        private const val PLAY_RECORD_THRESHOLD_MS = 5_000L
 
         const val ACTION_SET_SLEEP_TIMER = "com.simplesound.app.SET_SLEEP_TIMER"
         const val ACTION_CANCEL_SLEEP_TIMER = "com.simplesound.app.CANCEL_SLEEP_TIMER"

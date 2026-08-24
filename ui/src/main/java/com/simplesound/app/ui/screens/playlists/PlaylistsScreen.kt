@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import com.simplesound.app.ui.components.liquidGlass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -39,7 +40,15 @@ import com.simplesound.app.util.trackCountLabel
 @Composable
 fun PlaylistsScreen(vm: AppViewModel, navController: NavHostController) {
     val userPlaylists by vm.userPlaylists.collectAsStateWithLifecycle()
-    val native = vm.nativePlaylists()
+    // nativePlaylists() is a plain (non-flow) snapshot computed from the live
+    // track list, so it must be re-derived whenever tracks or favorites change
+    // (e.g. a track finishes playing and gets recorded into "Recently played",
+    // or the initial MediaStore scan replaces the sample library) -- otherwise
+    // this card row would freeze at whatever it first computed and never
+    // reflect playback happening while the tab stays open.
+    val tracks by vm.tracks.collectAsStateWithLifecycle()
+    val favoriteTrackIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
+    val native = remember(tracks, favoriteTrackIds) { vm.nativePlaylists() }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

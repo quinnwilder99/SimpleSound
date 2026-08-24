@@ -38,11 +38,22 @@ object MusicRepository {
     private const val KEY_QUEUE_TRACK_IDS = "last_queue_track_ids"
     private const val KEY_QUEUE_INDEX = "last_queue_index"
     private const val KEY_CUSTOM_ORDERS = "custom_orders"
+    private const val KEY_PLAY_STATS = "play_stats"
 
     private lateinit var prefs: SharedPreferences
 
     private val _tracks = MutableStateFlow(SampleData.tracks)
     val tracks: StateFlow<List<Track>> = _tracks.asStateFlow()
+
+    /**
+     * Per-track play stats (playCount, lastPlayedSec), keyed by track id. Kept
+     * separately from [_tracks] because the track list itself is rebuilt from
+     * scratch on every MediaStore scan ([loadDeviceLibrary]) — without this
+     * side table, every rescan (e.g. every app cold start) would silently wipe
+     * out play counts and "Recently played"/"Most played" would always be
+     * empty. Merged back onto freshly scanned tracks via [applyPlayStats].
+     */
+    private var playStats: MutableMap<Long, Pair<Int, Long>> = mutableMapOf()
 
     // On first launch there are NO user playlists — only the four native (computed)
     // playlists shipped via [nativePlaylists]. [load] overrides this from disk when
@@ -88,6 +99,8 @@ object MusicRepository {
             persistFavoriteTrackIds()
             prefs.edit().putBoolean(KEY_INITIALIZED, true).apply()
         }
+        playStats = decodePlayStats(prefs.getString(KEY_PLAY_STATS, null)).toMutableMap()
+        if (playStats.isNotEmpty()) _tracks.value = applyPlayStats(_tracks.value)
         // We just restored _userPlaylists / _favoriteTrackIds from disk (or seeded
         // them). The favorites tab flow was initialised eagerly with the sample seed
         // before this method ran, so recompute it now — otherwise the Favorites tab
@@ -102,7 +115,7 @@ object MusicRepository {
         if (scan) {
             val scanned = runCatching { MediaStoreScanner.scan(context) }.getOrDefault(emptyList())
             if (scanned.isNotEmpty()) {
-                _tracks.value = scanned
+                _tracks.value = applyPlayStats(scanned)
                 recomputeFavorites()
             }
         }
@@ -239,10 +252,19 @@ object MusicRepository {
     fun loadDeviceLibrary(context: Context) {
         val scanned = runCatching { MediaStoreScanner.scan(context) }.getOrDefault(emptyList())
         if (scanned.isNotEmpty()) {
-            _tracks.value = scanned
+            _tracks.value = applyPlayStats(scanned)
             // The "Favorite tracks" native playlist is derived from the track set,
             // so a media-scan change must refresh the favorites tab too.
             recomputeFavorites()
+        }
+    }
+
+    /** Overlay persisted [playStats] onto a freshly scanned track list. */
+    private fun applyPlayStats(tracks: List<Track>): List<Track> {
+        if (playStats.isEmpty()) return tracks
+        return tracks.map { track ->
+            val stats = playStats[track.id] ?: return@map track
+            track.copy(playCount = stats.first, lastPlayedSec = stats.second)
         }
     }
 
@@ -396,12 +418,39 @@ object MusicRepository {
         kind = PlaylistKind.FAVORITE_TRACKS
     )
 
+    // ---------- Play stats ----------
+
+    /**
+     * Record that [trackId] was just played: bumps its play count and stamps
+     * "now" as its last-played time. Drives the "Recently played" and "Most
+     * played" native playlists (see [nativePlaylists]). Called by
+     * [com.simplesound.app.playback.PlaybackService] once a track has been
+     * playing continuously for a few seconds, so a quick skip-through doesn't
+     * count as a play.
+     */
+    @Synchronized
+    fun recordTrackPlayed(trackId: Long) {
+        if (_tracks.value.none { it.id == trackId }) return
+        val prevCount = playStats[trackId]?.first ?: 0
+        val nowSec = System.currentTimeMillis() / 1000
+        playStats[trackId] = (prevCount + 1) to nowSec
+        persistPlayStats()
+        _tracks.value = _tracks.value.map {
+            if (it.id == trackId) it.copy(playCount = prevCount + 1, lastPlayedSec = nowSec) else it
+        }
+    }
+
+    private fun persistPlayStats() {
+        if (!this::prefs.isInitialized) return
+        prefs.edit().putString(KEY_PLAY_STATS, encodePlayStats(playStats)).apply()
+    }
+
     // ---------- Native (computed) playlists ----------
 
     fun nativePlaylists(): List<Playlist> {
         val all = _tracks.value
         val recentlyAdded = all.sortedByDescending { it.dateAddedSec }
-        val mostPlayed = all.sortedByDescending { it.playCount }
+        val mostPlayed = all.filter { it.playCount > 0 }.sortedByDescending { it.playCount }
         val recentlyPlayed = all.filter { it.lastPlayedSec > 0 }.sortedByDescending { it.lastPlayedSec }
         return listOf(
             Playlist("native-recently-added", "Recently added",
@@ -579,4 +628,22 @@ object MusicRepository {
 
     private fun sanitize(s: String): String =
         s.replace("\u0001", "").replace("\u0002", "")
+
+    /** Records separated by '\u0001', fields "id\u0002playCount\u0002lastPlayedSec". */
+    private fun encodePlayStats(stats: Map<Long, Pair<Int, Long>>): String =
+        stats.entries.joinToString("\u0001") { (id, stat) ->
+            "$id\u0002${stat.first}\u0002${stat.second}"
+        }
+
+    private fun decodePlayStats(raw: String?): Map<Long, Pair<Int, Long>> {
+        if (raw.isNullOrEmpty()) return emptyMap()
+        return raw.split("\u0001").mapNotNull { record ->
+            val f = record.split("\u0002")
+            if (f.size < 3) return@mapNotNull null
+            val id = f[0].toLongOrNull() ?: return@mapNotNull null
+            val count = f[1].toIntOrNull() ?: return@mapNotNull null
+            val lastPlayedSec = f[2].toLongOrNull() ?: return@mapNotNull null
+            id to (count to lastPlayedSec)
+        }.toMap()
+    }
 }
