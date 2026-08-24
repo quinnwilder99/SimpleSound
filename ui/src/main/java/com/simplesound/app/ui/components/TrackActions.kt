@@ -48,7 +48,7 @@ fun TrackActionsSheet(
     onDelete: () -> Unit,
     onShare: () -> Unit,
     onDetails: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
@@ -56,15 +56,24 @@ fun TrackActionsSheet(
                 track.title,
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
-            SheetItem(Icons.Rounded.PlayArrow, "Play") { onPlay(); onDismiss() }
+            SheetItem(Icons.Rounded.PlayArrow, "Play") {
+                onPlay()
+                onDismiss()
+            }
             SheetItem(
                 if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                if (isFavorite) "Remove from favorites" else "Add to favorites"
-            ) { onToggleFavorite(); onDismiss() }
+                if (isFavorite) "Remove from favorites" else "Add to favorites",
+            ) {
+                onToggleFavorite()
+                onDismiss()
+            }
             SheetItem(Icons.Rounded.PlaylistAdd, "Add to playlist") { onAddToPlaylist() }
-            SheetItem(Icons.Rounded.Share, "Share") { onShare(); onDismiss() }
+            SheetItem(Icons.Rounded.Share, "Share") {
+                onShare()
+                onDismiss()
+            }
             SheetItem(Icons.Rounded.Info, "Track details") { onDetails() }
             SheetItem(Icons.Rounded.Delete, "Delete", destructive = true) { onDelete() }
         }
@@ -90,7 +99,7 @@ fun PlaylistTrackActionsSheet(
     onAddToPlaylist: () -> Unit,
     onRemoveFromPlaylist: () -> Unit,
     onDetails: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
@@ -98,11 +107,12 @@ fun PlaylistTrackActionsSheet(
                 track.title,
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
             SheetItem(Icons.Rounded.PlaylistAdd, "Add to playlist") { onAddToPlaylist() }
             SheetItem(Icons.Rounded.RemoveCircleOutline, "Remove from playlist", destructive = true) {
-                onRemoveFromPlaylist(); onDismiss()
+                onRemoveFromPlaylist()
+                onDismiss()
             }
             SheetItem(Icons.Rounded.Info, "Track details") { onDetails() }
         }
@@ -110,16 +120,26 @@ fun PlaylistTrackActionsSheet(
 }
 
 @Composable
-private fun SheetItem(icon: ImageVector, label: String, destructive: Boolean = false, onClick: () -> Unit) {
+private fun SheetItem(
+    icon: ImageVector,
+    label: String,
+    destructive: Boolean = false,
+    onClick: () -> Unit,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier.fillMaxWidth().clickable(onClick = onClick)
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         val tint = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
         Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(18.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground,
+        )
     }
 }
 
@@ -128,7 +148,7 @@ private fun SheetItem(icon: ImageVector, label: String, destructive: Boolean = f
 fun AddToPlaylistDialog(
     playlists: List<Playlist>,
     onPick: (Playlist) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -143,20 +163,25 @@ fun AddToPlaylistDialog(
                     items(playlists) { pl ->
                         Row(
                             Modifier.fillMaxWidth().clickable { onPick(pl) }.padding(vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column {
-                                Text(pl.name, style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onBackground)
-                                Text(trackCountLabel(pl.trackCount),
+                                Text(
+                                    pl.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                )
+                                Text(
+                                    trackCountLabel(pl.trackCount),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
                 }
             }
-        }
+        },
     )
 }
 
@@ -165,7 +190,7 @@ fun AddToPlaylistDialog(
 fun DeleteTrackDialog(
     track: Track,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -176,7 +201,7 @@ fun DeleteTrackDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         title = { Text("Delete track") },
-        text = { Text("Permanently delete \"${track.title}\" from your library? This cannot be undone.") }
+        text = { Text("Permanently delete \"${track.title}\" from your library? This cannot be undone.") },
     )
 }
 
@@ -184,7 +209,7 @@ fun DeleteTrackDialog(
 @Composable
 fun TrackDetailsDialog(
     track: Track,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -200,16 +225,22 @@ fun TrackDetailsDialog(
                 DetailRow("Folder", track.folder.ifBlank { "Unknown" })
                 DetailRow("Play count", track.playCount.toString())
                 if (track.dateAddedSec > 0) {
-                    DetailRow("Date added", java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
-                        .format(java.util.Date(track.dateAddedSec * 1000L)))
+                    DetailRow(
+                        "Date added",
+                        java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+                            .format(java.util.Date(track.dateAddedSec * 1000L)),
+                    )
                 }
             }
-        }
+        },
     )
 }
 
 @Composable
-private fun DetailRow(label: String, value: String) {
+private fun DetailRow(
+    label: String,
+    value: String,
+) {
     Column {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)

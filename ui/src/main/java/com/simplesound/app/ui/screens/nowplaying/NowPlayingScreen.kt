@@ -63,8 +63,8 @@ import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.Artwork
 import com.simplesound.app.ui.components.DeleteTrackDialog
-import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.QueueSheet
+import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.util.formatDuration
 import com.simplesound.app.util.shareTrack
@@ -79,7 +79,10 @@ import com.simplesound.app.util.shareTrack
  *  5. Playback controls (shuffle / prev / play-pause / next / repeat)
  */
 @Composable
-fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
+fun NowPlayingScreen(
+    vm: AppViewModel,
+    onBack: () -> Unit,
+) {
     val player = LocalPlayer.current
     val context = LocalContext.current
     val track by player.currentTrack.collectAsStateWithLifecycle()
@@ -106,25 +109,26 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
     var showQueueSheet by remember { mutableStateOf(false) }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
     ) { inner ->
         Column(
-            modifier = Modifier
-                .padding(inner)
-                .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .padding(inner)
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 1 ACTION BAR
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
                         Icons.Rounded.ExpandMore,
                         contentDescription = "Minimize",
-                        tint = MaterialTheme.colorScheme.onBackground
+                        tint = MaterialTheme.colorScheme.onBackground,
                     )
                 }
                 Spacer(Modifier.weight(1f))
@@ -132,15 +136,19 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                     Icon(
                         Icons.Rounded.Speed,
                         contentDescription = "Playback speed",
-                        tint = if (playbackSpeed != 1.0f) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onBackground
+                        tint =
+                            if (playbackSpeed != 1.0f) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onBackground
+                            },
                     )
                 }
                 IconButton(onClick = { showActionsSheet = true }) {
                     Icon(
                         Icons.Rounded.MoreVert,
                         contentDescription = "More options",
-                        tint = MaterialTheme.colorScheme.onBackground
+                        tint = MaterialTheme.colorScheme.onBackground,
                     )
                 }
             }
@@ -154,7 +162,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                     Text(
                         text = "Nothing playing",
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else {
@@ -168,7 +176,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                     embeddedSource = current.uri,
                     modifier = Modifier.fillMaxWidth().aspectRatio(1f),
                     corner = 24.dp,
-                    iconSize = 96.dp
+                    iconSize = 96.dp,
                 )
                 Spacer(Modifier.weight(0.4f))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -179,7 +187,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                         fontWeight = FontWeight.Bold,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
@@ -187,7 +195,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Spacer(Modifier.height(20.dp))
@@ -197,23 +205,27 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = { showQueueSheet = true }) {
                         Icon(
                             Icons.Rounded.QueueMusic,
                             contentDescription = "Queue",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(26.dp),
                         )
                     }
                     IconButton(onClick = { vm.toggleFavoriteTrack(current.id) }) {
                         Icon(
                             if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                             contentDescription = if (isFavorite) "Unfavorite" else "Favorite",
-                            tint = if (isFavorite) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp)
+                            tint =
+                                if (isFavorite) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            modifier = Modifier.size(28.dp),
                         )
                     }
                     IconButton(onClick = { showAddDialog = true }) {
@@ -221,7 +233,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                             Icons.Rounded.Add,
                             contentDescription = "Add to playlist",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(28.dp),
                         )
                     }
                 }
@@ -229,16 +241,17 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
 
                 // 4 PROGRESS BAR + TIMELINE
                 val duration = durationMs.coerceAtLeast(0L)
-                val pos = seekingValue?.let { (it * duration).toLong() }
-                    ?: positionMs.coerceIn(0L, duration)
+                val pos =
+                    seekingValue?.let { (it * duration).toLong() }
+                        ?: positionMs.coerceIn(0L, duration)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = formatDuration(pos),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Slider(
                         value = if (duration > 0) pos.toFloat() / duration.toFloat() else 0f,
@@ -251,16 +264,17 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                             seekingValue = null
                         },
                         modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                            inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
+                        colors =
+                            SliderDefaults.colors(
+                                thumbColor = Color.White,
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            ),
                     )
                     Text(
                         text = formatDuration(duration),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -270,15 +284,19 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = { player.toggleShuffle() }) {
                         Icon(
                             Icons.Rounded.Shuffle,
                             contentDescription = "Shuffle",
-                            tint = if (isShuffleOn) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.size(28.dp)
+                            tint =
+                                if (isShuffleOn) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onBackground
+                                },
+                            modifier = Modifier.size(28.dp),
                         )
                     }
                     IconButton(onClick = { player.previous() }) {
@@ -286,22 +304,22 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                             Icons.Rounded.SkipPrevious,
                             contentDescription = "Previous",
                             tint = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(40.dp),
                         )
                     }
                     Box(
                         modifier = Modifier.size(72.dp).clip(CircleShape),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         IconButton(
                             onClick = { player.togglePlayPause() },
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
                         ) {
                             Icon(
                                 if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                 contentDescription = if (isPlaying) "Pause" else "Play",
                                 tint = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(48.dp),
                             )
                         }
                     }
@@ -310,16 +328,20 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
                             Icons.Rounded.SkipNext,
                             contentDescription = "Next",
                             tint = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(40.dp),
                         )
                     }
                     IconButton(onClick = { player.cycleRepeatMode() }) {
                         Icon(
                             if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                             contentDescription = "Repeat",
-                            tint = if (repeatMode > 0) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.size(28.dp)
+                            tint =
+                                if (repeatMode > 0) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onBackground
+                                },
+                            modifier = Modifier.size(28.dp),
                         )
                     }
                 }
@@ -333,8 +355,11 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
     if (showAddDialog && current != null) {
         AddToPlaylistDialog(
             playlists = userPlaylists,
-            onPick = { pl -> vm.addTracksToPlaylist(pl.id, listOf(current.id)); showAddDialog = false },
-            onDismiss = { showAddDialog = false }
+            onPick = { pl ->
+                vm.addTracksToPlaylist(pl.id, listOf(current.id))
+                showAddDialog = false
+            },
+            onDismiss = { showAddDialog = false },
         )
     }
     if (showActionsSheet && current != null) {
@@ -343,18 +368,31 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
             isFavorite = current.id in favoriteIds,
             onPlay = { player.playSingle(current) },
             onToggleFavorite = { vm.toggleFavoriteTrack(current.id) },
-            onAddToPlaylist = { showActionsSheet = false; showAddDialog = true },
-            onDelete = { showActionsSheet = false; deleteTrack = true },
+            onAddToPlaylist = {
+                showActionsSheet = false
+                showAddDialog = true
+            },
+            onDelete = {
+                showActionsSheet = false
+                deleteTrack = true
+            },
             onShare = { shareTrack(context, current) },
-            onDetails = { showActionsSheet = false; detailsTrack = true },
-            onDismiss = { showActionsSheet = false }
+            onDetails = {
+                showActionsSheet = false
+                detailsTrack = true
+            },
+            onDismiss = { showActionsSheet = false },
         )
     }
     if (deleteTrack && current != null) {
         DeleteTrackDialog(
             track = current,
-            onConfirm = { vm.deleteTrack(current.id); deleteTrack = false; onBack() },
-            onDismiss = { deleteTrack = false }
+            onConfirm = {
+                vm.deleteTrack(current.id)
+                deleteTrack = false
+                onBack()
+            },
+            onDismiss = { deleteTrack = false },
         )
     }
     if (detailsTrack && current != null) {
@@ -364,7 +402,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
         PlaybackSpeedSheet(
             currentSpeed = playbackSpeed,
             onSpeedChange = { player.setSpeed(it) },
-            onDismiss = { showSpeedSheet = false }
+            onDismiss = { showSpeedSheet = false },
         )
     }
     if (showQueueSheet) {
@@ -375,7 +413,7 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
             onPlay = { index -> player.playQueueItemAt(index) },
             onMove = { from, to -> player.moveQueueItem(from, to) },
             onRemove = { index -> player.removeQueueItem(index) },
-            onDismiss = { showQueueSheet = false }
+            onDismiss = { showQueueSheet = false },
         )
     }
 }
@@ -389,49 +427,62 @@ fun NowPlayingScreen(vm: AppViewModel, onBack: () -> Unit) {
 private fun PlaybackSpeedSheet(
     currentSpeed: Float,
     onSpeedChange: (Float) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text = "Playback speed",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(12.dp))
             Text(
                 text = "%.1fx".format(currentSpeed),
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
-                color = if (currentSpeed == 1.0f) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.primary
+                color =
+                    if (currentSpeed == 1.0f) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
             )
             Spacer(Modifier.height(16.dp))
             val presets = listOf(0.1f, 0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 presets.forEach { preset ->
                     val isSelected = (currentSpeed - preset).let { it >= -0.001f && it <= 0.001f }
                     AssistChip(
                         onClick = { onSpeedChange(preset) },
                         label = { Text("%.2fx".format(preset)) },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                            labelColor = if (isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        colors =
+                            AssistChipDefaults.assistChipColors(
+                                containerColor =
+                                    if (isSelected) {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                labelColor =
+                                    if (isSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                            ),
                     )
                 }
             }
@@ -440,14 +491,15 @@ private fun PlaybackSpeedSheet(
                 value = currentSpeed,
                 onValueChange = { onSpeedChange(it) },
                 valueRange = 0.1f..2.0f,
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary
-                )
+                colors =
+                    SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                    ),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.End,
             ) {
                 TextButton(onClick = { onSpeedChange(1.0f) }) {
                     Text("Reset to 1.0x")
@@ -457,4 +509,3 @@ private fun PlaybackSpeedSheet(
         }
     }
 }
-

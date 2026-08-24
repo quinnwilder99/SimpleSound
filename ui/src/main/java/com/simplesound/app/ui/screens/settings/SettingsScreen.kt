@@ -2,18 +2,15 @@ package com.simplesound.app.ui.screens.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,11 +29,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.ui.AppViewModel
-import com.simplesound.core.theme.AccentColor
 import com.simplesound.app.ui.theme.color
 import com.simplesound.app.ui.theme.label
+import com.simplesound.core.theme.AccentColor
 
 /**
  * The Settings surface. v0.1 keeps it intentionally small: a single accent-color
@@ -51,49 +47,52 @@ fun SettingsScreen(
     onAccentColor: () -> Unit = {},
     onSleepTimer: () -> Unit = {},
     onCrossfade: () -> Unit = {},
-    onAbout: () -> Unit = {}
+    onAbout: () -> Unit = {},
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
                         Icons.Rounded.ArrowBack,
                         "Back",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
                 Text(
                     text = "Settings",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onBackground,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
             }
-        }
+        },
     ) { inner ->
         LazyColumn(
-            modifier = Modifier
-                .padding(inner)
-                .fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                horizontal = 20.dp,
-                vertical = 8.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier =
+                Modifier
+                    .padding(inner)
+                    .fillMaxSize(),
+            contentPadding =
+                androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 20.dp,
+                    vertical = 8.dp,
+                ),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // ---- Accent color ----
             item {
                 SettingsRow(
                     title = "Accent color",
                     subtitle = "Choose the app's highlight color",
-                    onClick = onAccentColor
+                    onClick = onAccentColor,
                 )
             }
 
@@ -102,7 +101,7 @@ fun SettingsScreen(
                 SettingsRow(
                     title = "Manage tabs",
                     subtitle = "Choose which tabs appear and their order",
-                    onClick = onManageTabs
+                    onClick = onManageTabs,
                 )
             }
 
@@ -111,7 +110,7 @@ fun SettingsScreen(
                 SettingsRow(
                     title = "Sleep timer",
                     subtitle = "Pause music automatically after a set time",
-                    onClick = onSleepTimer
+                    onClick = onSleepTimer,
                 )
             }
 
@@ -120,7 +119,7 @@ fun SettingsScreen(
                 SettingsRow(
                     title = "Crossfade",
                     subtitle = "Smoothly blend the end of one track into the next",
-                    onClick = onCrossfade
+                    onClick = onCrossfade,
                 )
             }
 
@@ -129,7 +128,7 @@ fun SettingsScreen(
                 SettingsRow(
                     title = "About simpleSOUND",
                     subtitle = "Version, credits & more",
-                    onClick = onAbout
+                    onClick = onAbout,
                 )
             }
         }
@@ -142,37 +141,42 @@ private fun SectionLabel(text: String) {
         text = text,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontWeight = FontWeight.SemiBold
+        fontWeight = FontWeight.SemiBold,
     )
 }
 
 @Composable
-private fun SettingsRow(title: String, subtitle: String, onClick: () -> Unit) {
+private fun SettingsRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Icon(
             Icons.Rounded.ChevronRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -181,36 +185,40 @@ private fun SettingsRow(title: String, subtitle: String, onClick: () -> Unit) {
 private fun AccentSwatch(
     color: AccentColor,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(color.color)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(color.color)
+                    .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
         ) {
             if (selected) {
                 Box(
                     Modifier
                         .size(14.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.85f))
+                        .background(Color.White.copy(alpha = 0.85f)),
                 )
             }
         }
         Text(
             text = color.label,
             style = MaterialTheme.typography.labelSmall,
-            color = if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+            color =
+                if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )
     }
 }
-

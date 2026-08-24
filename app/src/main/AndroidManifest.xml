@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Read local audio. Android 13+ uses granular media perm; older uses READ_EXTERNAL_STORAGE. -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
@@ -31,10 +32,15 @@
             </intent-filter>
         </activity>
 
+        <!-- tools:ignore="Instantiatable": known Lint false positive when
+             @AndroidEntryPoint is applied to a Service. Lint's inheritance check
+             gets confused by the Hilt-generated Hilt_PlaybackService base class;
+             PlaybackService still genuinely extends MediaSessionService. -->
         <service
             android:name=".playback.PlaybackService"
             android:exported="true"
-            android:foregroundServiceType="mediaPlayback">
+            android:foregroundServiceType="mediaPlayback"
+            tools:ignore="Instantiatable">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
@@ -48,6 +54,20 @@
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- WorkManager's default initializer is disabled because SimpleSoundApp
+             implements Configuration.Provider to supply a HiltWorkerFactory, so
+             LibrarySyncWorker (@HiltWorker) can be constructor-injected. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
         </provider>
 
     </application>

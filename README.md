@@ -1,5 +1,7 @@
 # simpleSOUND
 
+[![CI](https://github.com/quinnwilder99/SimpleSound/actions/workflows/ci.yml/badge.svg)](https://github.com/quinnwilder99/SimpleSound/actions/workflows/ci.yml)
+
 > A clean, offline-first Android MP3 player built with Jetpack Compose and a modular architecture.
 
 Made this because I am tired of bad and confusing MP3 players on the market. Jeez, I just need a good MP3 player — I don't need a whole compact studio on my phone just to play some Ye's songs.
@@ -186,12 +188,16 @@ Responsible for:
 * Repository pattern
 * Music library scanning
 * Persistence
+* Auto-syncing the library when device media changes, via a `ContentObserver` on
+  `MediaStore.Audio.Media` that enqueues a `WorkManager` job to rescan and update
+  Room — no user action required
 
 Uses:
 
-* Room
+* Room (indexed track/playlist/favorites/play-stats tables)
 * DataStore
 * MediaStore
+* WorkManager
 
 ---
 
@@ -231,8 +237,11 @@ Contains shared code used across modules:
 | Preferences           | DataStore                         |
 | Async                 | Kotlin Coroutines + Flow          |
 | Images                | Coil                               |
-| Library Scanner       | MediaStore                        |
+| Library Scanner       | MediaStore + ContentObserver       |
+| Background Sync       | WorkManager (HiltWorker)          |
 | Build System          | Gradle Kotlin DSL                 |
+| Static Analysis       | ktlint + detekt                   |
+| CI/CD                 | GitHub Actions                     |
 | Min SDK               | 26                                 |
 | Target SDK            | 34                                 |
 
@@ -313,17 +322,34 @@ Build debug APK:
 ./gradlew :app:assembleDebug
 ```
 
-Run tests:
+Run unit tests (Repository + ViewModel, JVM/Robolectric):
 
 ```bash
 ./gradlew test
 ```
 
-Run lint:
+Run Compose UI tests (needs a connected device/emulator):
 
 ```bash
-./gradlew lint
+./gradlew :ui:connectedAndroidTest
 ```
+
+Run static analysis:
+
+```bash
+./gradlew ktlintCheck detekt
+```
+
+Run Android Lint:
+
+```bash
+./gradlew :app:lintDebug
+```
+
+Every push/PR to `main` runs the full set above (ktlint, detekt, unit tests, lint,
+`assembleDebug`) via [GitHub Actions](.github/workflows/ci.yml). detekt findings that
+predate its adoption are grandfathered in `config/detekt/baseline-*.xml`; new code
+is held to the clean baseline.
 
 ---
 

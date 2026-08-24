@@ -17,7 +17,7 @@ data class Playlist(
      * Epoch milliseconds of when the user last hearted this playlist. Used to order
      * the Favorites tab as a stack: most recently hearted appears on top. 0 when unhearted.
      */
-    val favoritedAt: Long = 0L
+    val favoritedAt: Long = 0L,
 ) {
     val trackCount: Int get() = trackIds.size
     val isEditable: Boolean get() = kind == PlaylistKind.USER
@@ -25,8 +25,8 @@ data class Playlist(
 
 enum class PlaylistKind {
     USER,
-    FAVORITE_TRACKS,   // auto-collects every hearted single track
+    FAVORITE_TRACKS, // auto-collects every hearted single track
     RECENTLY_ADDED,
     MOST_PLAYED,
-    RECENTLY_PLAYED
+    RECENTLY_PLAYED,
 }

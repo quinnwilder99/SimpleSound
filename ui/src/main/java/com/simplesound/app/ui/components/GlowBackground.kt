@@ -27,29 +27,32 @@ import androidx.compose.ui.graphics.TileMode
 fun GlowBackground(
     accent: Color,
     modifier: Modifier = Modifier,
-    intensity: Float = 0.42f
+    intensity: Float = 0.42f,
 ) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .drawBehind {
-                val w = size.width
-                val h = size.height
-                val center = Offset(x = w / 2f, y = h * 1.05f)
-                val radius = h * 1.25f
-                drawRect(color = Color.Black)
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            accent.copy(alpha = intensity),
-                            accent.copy(alpha = intensity * 0.35f),
-                            Color.Transparent
-                        ),
-                        center = center,
-                        radius = radius,
-                        tileMode = TileMode.Clamp
+        modifier =
+            modifier
+                .fillMaxSize()
+                .drawBehind {
+                    val w = size.width
+                    val h = size.height
+                    val center = Offset(x = w / 2f, y = h * 1.05f)
+                    val radius = h * 1.25f
+                    drawRect(color = Color.Black)
+                    drawRect(
+                        brush =
+                            Brush.radialGradient(
+                                colors =
+                                    listOf(
+                                        accent.copy(alpha = intensity),
+                                        accent.copy(alpha = intensity * 0.35f),
+                                        Color.Transparent,
+                                    ),
+                                center = center,
+                                radius = radius,
+                                tileMode = TileMode.Clamp,
+                            ),
                     )
-                )
-            }
+                },
     )
 }

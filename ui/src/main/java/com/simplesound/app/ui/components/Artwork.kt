@@ -38,14 +38,15 @@ fun Artwork(
     modifier: Modifier = Modifier,
     corner: Dp = 12.dp,
     @Suppress("unused") iconSize: Dp = 28.dp,
-    embeddedSource: String? = null
+    embeddedSource: String? = null,
 ) {
     val context = LocalContext.current
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(corner))
-            .background(SoundColors.SurfaceVariant),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(corner))
+                .background(SoundColors.SurfaceVariant),
+        contentAlignment = Alignment.Center,
     ) {
         key(embeddedSource ?: uri) {
             val embedded = rememberEmbeddedArt(embeddedSource)
@@ -62,7 +63,7 @@ fun Artwork(
                             bitmap = bmp.asImageBitmap(),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }
@@ -71,27 +72,29 @@ fun Artwork(
             if (embedded is EmbeddedState.None && !uri.isNullOrBlank()) {
                 val parsed = runCatching { Uri.parse(uri) }.getOrNull()
                 AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(parsed ?: uri)
-                        .memoryCacheKey(uri)
-                        .diskCacheKey(uri)
-                        .crossfade(false)
-                        .build(),
+                    model =
+                        ImageRequest.Builder(context)
+                            .data(parsed ?: uri)
+                            .memoryCacheKey(uri)
+                            .diskCacheKey(uri)
+                            .crossfade(false)
+                            .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                     error = painterResource(R.drawable.no_artwork),
-                    placeholder = painterResource(R.drawable.no_artwork)
+                    placeholder = painterResource(R.drawable.no_artwork),
                 )
             } else if (embedded is EmbeddedState.None) {
                 AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(R.drawable.no_artwork)
-                        .crossfade(true)
-                        .build(),
+                    model =
+                        ImageRequest.Builder(context)
+                            .data(R.drawable.no_artwork)
+                            .crossfade(true)
+                            .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }
@@ -100,7 +103,9 @@ fun Artwork(
 
 private sealed interface EmbeddedState {
     data object Loading : EmbeddedState
+
     data object None : EmbeddedState
+
     class Art(val bitmap: Bitmap) : EmbeddedState
 }
 
@@ -113,23 +118,25 @@ private fun rememberEmbeddedArt(source: String?): EmbeddedState {
     }
     if (state is EmbeddedState.Loading) {
         LaunchedEffect(source) {
-            val decoded: EmbeddedState = withContext(Dispatchers.IO) {
-                val retriever = MediaMetadataRetriever()
-                val bitmap: Bitmap? = try {
-                    retriever.setDataSource(context, Uri.parse(source))
-                    val bytes = retriever.embeddedPicture
-                    if (bytes != null) BitmapFactory.decodeByteArray(bytes, 0, bytes.size) else null
-                } catch (e: Throwable) {
-                    null
-                } finally {
-                    runCatching { retriever.release() }
+            val decoded: EmbeddedState =
+                withContext(Dispatchers.IO) {
+                    val retriever = MediaMetadataRetriever()
+                    val bitmap: Bitmap? =
+                        try {
+                            retriever.setDataSource(context, Uri.parse(source))
+                            val bytes = retriever.embeddedPicture
+                            if (bytes != null) BitmapFactory.decodeByteArray(bytes, 0, bytes.size) else null
+                        } catch (e: Throwable) {
+                            null
+                        } finally {
+                            runCatching { retriever.release() }
+                        }
+                    // Cache the decoded bitmap. The render path and the cache accessor
+                    // both guard against a recycled bitmap (low-memory trim) so we never
+                    // hand a recycled native buffer to `asImageBitmap()`, which would
+                    // otherwise crash the renderer.
+                    bitmap?.let { EmbeddedState.Art(it) } ?: EmbeddedState.None
                 }
-                // Cache the decoded bitmap. The render path and the cache accessor
-                // both guard against a recycled bitmap (low-memory trim) so we never
-                // hand a recycled native buffer to `asImageBitmap()`, which would
-                // otherwise crash the renderer.
-                bitmap?.let { EmbeddedState.Art(it) } ?: EmbeddedState.None
-            }
             LruEmbeddedArt[source] = decoded
             state = decoded
         }
@@ -139,15 +146,17 @@ private fun rememberEmbeddedArt(source: String?): EmbeddedState {
 
 private object LruEmbeddedArt {
     private const val MAX = 256
-    private val cache = object : LinkedHashMap<String, EmbeddedState>(MAX, 0.75f, true) {
-        override fun removeEldestEntry(eldest: Map.Entry<String, EmbeddedState>): Boolean {
-            if (size <= MAX) return false
-            // Release the bitmap backing an evicted entry so we do not leak
-            // native pixels for tracks the user has scrolled away from.
-            (eldest.value as? EmbeddedState.Art)?.let { runCatching { it.bitmap.recycle() } }
-            return true
+    private val cache =
+        object : LinkedHashMap<String, EmbeddedState>(MAX, 0.75f, true) {
+            override fun removeEldestEntry(eldest: Map.Entry<String, EmbeddedState>): Boolean {
+                if (size <= MAX) return false
+                // Release the bitmap backing an evicted entry so we do not leak
+                // native pixels for tracks the user has scrolled away from.
+                (eldest.value as? EmbeddedState.Art)?.let { runCatching { it.bitmap.recycle() } }
+                return true
+            }
         }
-    }
+
     @Synchronized
     operator fun get(key: String): EmbeddedState? {
         val v = cache[key] ?: return null
@@ -160,8 +169,12 @@ private object LruEmbeddedArt {
         }
         return v
     }
+
     @Synchronized
-    operator fun set(key: String, value: EmbeddedState) {
+    operator fun set(
+        key: String,
+        value: EmbeddedState,
+    ) {
         cache[key] = value
     }
 }

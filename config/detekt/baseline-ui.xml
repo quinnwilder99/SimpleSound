@@ -1,0 +1,60 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:HomeScreen.kt$@Composable fun HomeScreen( vm: AppViewModel, navController: NavHostController, )</ID>
+    <ID>CyclomaticComplexMethod:NowPlayingScreen.kt$@Composable fun NowPlayingScreen( vm: AppViewModel, onBack: () -&gt; Unit, )</ID>
+    <ID>CyclomaticComplexMethod:PlaylistDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PlaylistDetailScreen( vm: AppViewModel, playlistId: String, onBack: () -&gt; Unit, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
+    <ID>CyclomaticComplexMethod:SearchScreen.kt$@Composable fun SearchScreen( vm: AppViewModel, onBack: () -&gt; Unit, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
+    <ID>CyclomaticComplexMethod:SleepTimerScreen.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun SleepTimerScreen(onBack: () -&gt; Unit)</ID>
+    <ID>CyclomaticComplexMethod:TracksScreen.kt$@Composable fun TracksScreen( vm: AppViewModel, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
+    <ID>ExplicitItLambdaParameter:ManageTabsScreen.kt${ _, it -&gt; it.tab.name }</ID>
+    <ID>FunctionNaming:HomeScreen.kt$@Composable fun HomeScreen( vm: AppViewModel, navController: NavHostController, )</ID>
+    <ID>FunctionNaming:HomeScreen.kt$@Composable private fun CreatePlaylistDialog( onConfirm: (String) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun AddTracksToPlaylistDialog( playlists: List&lt;Playlist&gt;, pickedCount: Int, onAddToExisting: (Playlist) -&gt; Unit, onCreateNew: (String) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun DeleteTracksDialog( count: Int, onConfirm: () -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun PlaylistSelectionActionBar( selectedCount: Int, onPlay: () -&gt; Unit, onAdd: () -&gt; Unit, onShare: () -&gt; Unit, onRemove: () -&gt; Unit, onClear: () -&gt; Unit, modifier: Modifier = Modifier, shareEnabled: Boolean = false, )</ID>
+    <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun RemoveTracksDialog( count: Int, onConfirm: () -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun SelectionActionBar( selectedCount: Int, onPlay: () -&gt; Unit, onAdd: () -&gt; Unit, onDelete: () -&gt; Unit, onClear: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>FunctionNaming:MultiSelectionActions.kt$@Composable private fun BarAction( icon: ImageVector, label: String, onClick: () -&gt; Unit, destructive: Boolean = false, enabled: Boolean = true, )</ID>
+    <ID>FunctionNaming:TracksScreen.kt$@Composable fun TracksScreen( vm: AppViewModel, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:AboutScreen.kt$@Composable fun AboutScreen(onBack: () -&gt; Unit)</ID>
+    <ID>LongMethod:AccentColorScreen.kt$@Composable fun AccentColorScreen( vm: AppViewModel, onBack: () -&gt; Unit, )</ID>
+    <ID>LongMethod:CrossfadeScreen.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun CrossfadeScreen( vm: AppViewModel, onBack: () -&gt; Unit, )</ID>
+    <ID>LongMethod:HomeScreen.kt$@Composable fun HomeScreen( vm: AppViewModel, navController: NavHostController, )</ID>
+    <ID>LongMethod:ManageTabsScreen.kt$@Composable fun ManageTabsScreen( vm: AppViewModel, onBack: () -&gt; Unit, )</ID>
+    <ID>LongMethod:ManageTabsScreen.kt$@Composable private fun TabRow( setting: TabSetting, canMoveUp: Boolean, canMoveDown: Boolean, onToggle: () -&gt; Unit, onMoveUp: () -&gt; Unit, onMoveDown: () -&gt; Unit, )</ID>
+    <ID>LongMethod:MiniPlayer.kt$@Composable fun MiniPlayer( modifier: Modifier = Modifier, onClick: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:NowPlayingScreen.kt$@Composable fun NowPlayingScreen( vm: AppViewModel, onBack: () -&gt; Unit, )</ID>
+    <ID>LongMethod:NowPlayingScreen.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable private fun PlaybackSpeedSheet( currentSpeed: Float, onSpeedChange: (Float) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>LongMethod:PlaylistDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PlaylistDetailScreen( vm: AppViewModel, playlistId: String, onBack: () -&gt; Unit, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:PlaylistGridCard.kt$@Composable fun PlaylistGridCard( playlist: Playlist, shaking: Boolean, onClick: () -&gt; Unit, onLongPress: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongMethod:QueueSheet.kt$@Composable private fun QueueRow( track: Track, isCurrent: Boolean, canMoveUp: Boolean, canMoveDown: Boolean, onPlay: () -&gt; Unit, onMoveUp: () -&gt; Unit, onMoveDown: () -&gt; Unit, onRemove: () -&gt; Unit, )</ID>
+    <ID>LongMethod:QueueSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun QueueSheet( queue: List&lt;Track&gt;, currentIndex: Int, queueTitle: String, onPlay: (index: Int) -&gt; Unit, onMove: (from: Int, to: Int) -&gt; Unit, onRemove: (index: Int) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>LongMethod:SearchScreen.kt$@Composable fun SearchScreen( vm: AppViewModel, onBack: () -&gt; Unit, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:SettingsScreen.kt$@Composable fun SettingsScreen( vm: AppViewModel, onBack: () -&gt; Unit, onManageTabs: () -&gt; Unit, onAccentColor: () -&gt; Unit = {}, onSleepTimer: () -&gt; Unit = {}, onCrossfade: () -&gt; Unit = {}, onAbout: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:SimpleSoundNavHost.kt$@Composable fun SimpleSoundNavHost( vm: AppViewModel, navController: NavHostController = rememberNavController(), )</ID>
+    <ID>LongMethod:SleepTimerScreen.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun SleepTimerScreen(onBack: () -&gt; Unit)</ID>
+    <ID>LongMethod:TrackRow.kt$@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class) @Composable fun TrackRow( track: Track, onClick: () -&gt; Unit, onMore: () -&gt; Unit, modifier: Modifier = Modifier, selectionMode: Boolean = false, selected: Boolean = false, onLongClick: () -&gt; Unit = {}, customOrderMode: Boolean = false, canMoveUp: Boolean = true, canMoveDown: Boolean = true, onMoveUp: () -&gt; Unit = {}, onMoveDown: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:TracksScreen.kt$@Composable fun TracksScreen( vm: AppViewModel, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
+    <ID>LongParameterList:ManageTabsScreen.kt$( setting: TabSetting, canMoveUp: Boolean, canMoveDown: Boolean, onToggle: () -&gt; Unit, onMoveUp: () -&gt; Unit, onMoveDown: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:MultiSelectionActions.kt$( selectedCount: Int, onPlay: () -&gt; Unit, onAdd: () -&gt; Unit, onDelete: () -&gt; Unit, onClear: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:MultiSelectionActions.kt$( selectedCount: Int, onPlay: () -&gt; Unit, onAdd: () -&gt; Unit, onShare: () -&gt; Unit, onRemove: () -&gt; Unit, onClear: () -&gt; Unit, modifier: Modifier = Modifier, shareEnabled: Boolean = false, )</ID>
+    <ID>LongParameterList:PlaylistOptionsSheet.kt$( playlist: Playlist, onPlay: () -&gt; Unit, onAdd: () -&gt; Unit, onShare: () -&gt; Unit, onRemove: () -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:QueueSheet.kt$( queue: List&lt;Track&gt;, currentIndex: Int, queueTitle: String, onPlay: (index: Int) -&gt; Unit, onMove: (from: Int, to: Int) -&gt; Unit, onRemove: (index: Int) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:QueueSheet.kt$( track: Track, isCurrent: Boolean, canMoveUp: Boolean, canMoveDown: Boolean, onPlay: () -&gt; Unit, onMoveUp: () -&gt; Unit, onMoveDown: () -&gt; Unit, onRemove: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:SettingsScreen.kt$( vm: AppViewModel, onBack: () -&gt; Unit, onManageTabs: () -&gt; Unit, onAccentColor: () -&gt; Unit = {}, onSleepTimer: () -&gt; Unit = {}, onCrossfade: () -&gt; Unit = {}, onAbout: () -&gt; Unit = {}, )</ID>
+    <ID>LongParameterList:SortHeader.kt$( current: SortOption, onSort: (SortOption) -&gt; Unit, onShuffle: () -&gt; Unit, onPlayAll: () -&gt; Unit, modifier: Modifier = Modifier, // CUSTOM_ORDER only means anything inside a single playlist (it's backed by // a per-playlist saved order — see MusicRepository.sortPlaylistTracks); the // Tracks tab has no playlist context to hang a custom order off of, so it // must pass a restricted list here rather than default to every SortOption. options: List&lt;SortOption&gt; = SortOption.entries, )</ID>
+    <ID>LongParameterList:TrackActions.kt$( track: Track, isFavorite: Boolean, onPlay: () -&gt; Unit, onToggleFavorite: () -&gt; Unit, onAddToPlaylist: () -&gt; Unit, onDelete: () -&gt; Unit, onShare: () -&gt; Unit, onDetails: () -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:TrackRow.kt$( track: Track, onClick: () -&gt; Unit, onMore: () -&gt; Unit, modifier: Modifier = Modifier, selectionMode: Boolean = false, selected: Boolean = false, onLongClick: () -&gt; Unit = {}, customOrderMode: Boolean = false, canMoveUp: Boolean = true, canMoveDown: Boolean = true, onMoveUp: () -&gt; Unit = {}, onMoveDown: () -&gt; Unit = {}, )</ID>
+    <ID>MatchingDeclarationName:Color.kt$SoundColors</ID>
+    <ID>MatchingDeclarationName:SimpleSoundNavHost.kt$Routes</ID>
+    <ID>ReturnCount:Artwork.kt$LruEmbeddedArt$@Synchronized operator fun get(key: String): EmbeddedState?</ID>
+    <ID>SwallowedException:Artwork.kt$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:Artwork.kt$e: Throwable</ID>
+    <ID>UnusedParameter:MultiSelectionActions.kt$enabled: Boolean = true</ID>
+    <ID>UnusedParameter:SettingsScreen.kt$vm: AppViewModel</ID>
+    <ID>UnusedPrivateMember:SettingsScreen.kt$@Composable private fun AccentSwatch( color: AccentColor, selected: Boolean, onClick: () -&gt; Unit, )</ID>
+    <ID>UnusedPrivateMember:SettingsScreen.kt$@Composable private fun SectionLabel(text: String)</ID>
+  </CurrentIssues>
+</SmellBaseline>

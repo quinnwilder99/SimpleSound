@@ -35,16 +35,17 @@ import com.simplesound.app.util.trackCountLabel
 fun FoldersScreen(vm: AppViewModel) {
     val player = LocalPlayer.current
     val tracks by vm.tracks.collectAsStateWithLifecycle()
-    val folders = remember(tracks) {
-        tracks.groupBy { it.folder.ifBlank { "Unknown folder" } }.toList().sortedBy { it.first.lowercase() }
-    }
+    val folders =
+        remember(tracks) {
+            tracks.groupBy { it.folder.ifBlank { "Unknown folder" } }.toList().sortedBy { it.first.lowercase() }
+        }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
         items(folders, key = { it.first }) { (folder, list) ->
             Row(
                 Modifier.fillMaxWidth().clickable { player.playQueue(list, 0) }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 CircleGlyph(Icons.Rounded.Folder, Modifier.size(52.dp))
                 Spacer(Modifier.width(16.dp))
@@ -53,21 +54,28 @@ fun FoldersScreen(vm: AppViewModel) {
                         folder.substringAfterLast('/'),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        folder, style = MaterialTheme.typography.bodyMedium,
+                        folder,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Text(
-                    trackCountLabel(list.size), style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    trackCountLabel(list.size),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline, thickness = 0.5.dp,
-                modifier = Modifier.padding(start = 84.dp))
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(start = 84.dp),
+            )
         }
     }
 }

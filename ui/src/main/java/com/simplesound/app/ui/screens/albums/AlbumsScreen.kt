@@ -33,23 +33,24 @@ private data class AlbumGroup(val name: String, val artist: String, val artUri: 
 fun AlbumsScreen(vm: AppViewModel) {
     val player = LocalPlayer.current
     val tracks by vm.tracks.collectAsStateWithLifecycle()
-    val albums = remember(tracks) {
-        tracks.groupBy { it.albumOrUnknown }
-            .map { (name, list) ->
-                AlbumGroup(
-                    name = name,
-                    artist = list.first().artistOrUnknown,
-                    artUri = list.firstOrNull { it.albumArtUri != null }?.albumArtUri,
-                    tracks = list
-                )
-            }
-            .sortedBy { it.name.lowercase() }
-    }
+    val albums =
+        remember(tracks) {
+            tracks.groupBy { it.albumOrUnknown }
+                .map { (name, list) ->
+                    AlbumGroup(
+                        name = name,
+                        artist = list.first().artistOrUnknown,
+                        artUri = list.firstOrNull { it.albumArtUri != null }?.albumArtUri,
+                        tracks = list,
+                    )
+                }
+                .sortedBy { it.name.lowercase() }
+        }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(8.dp, 8.dp, 8.dp, 96.dp)
+        contentPadding = PaddingValues(8.dp, 8.dp, 8.dp, 96.dp),
     ) {
         items(albums, key = { it.name }) { album ->
             Column(Modifier.padding(8.dp).clickable { player.playQueue(album.tracks, 0) }) {
@@ -57,21 +58,23 @@ fun AlbumsScreen(vm: AppViewModel) {
                     uri = album.artUri,
                     modifier = Modifier.fillMaxWidth().aspectRatio(1f),
                     corner = 16.dp,
-                    iconSize = 48.dp
+                    iconSize = 48.dp,
                 )
                 Text(
                     album.name,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 8.dp)
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
                 Text(
                     "${album.artist} · ${trackCountLabel(album.tracks.size)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

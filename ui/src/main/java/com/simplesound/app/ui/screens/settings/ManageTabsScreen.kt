@@ -1,9 +1,7 @@
 package com.simplesound.app.ui.screens.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,7 +44,10 @@ import com.simplesound.app.ui.AppViewModel
  * [AppViewModel] tab settings flow so the home tab strip updates immediately.
  */
 @Composable
-fun ManageTabsScreen(vm: AppViewModel, onBack: () -> Unit) {
+fun ManageTabsScreen(
+    vm: AppViewModel,
+    onBack: () -> Unit,
+) {
     val tabSettings by vm.tabSettings.collectAsStateWithLifecycle()
     // Local working copy so reordering feels instant; commit on every change.
     var working by remember(tabSettings) { mutableStateOf(tabSettings) }
@@ -60,10 +61,11 @@ fun ManageTabsScreen(vm: AppViewModel, onBack: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
                     Icon(Icons.Rounded.ArrowBack, "Back", tint = MaterialTheme.colorScheme.primary)
@@ -72,27 +74,29 @@ fun ManageTabsScreen(vm: AppViewModel, onBack: () -> Unit) {
                     text = "Manage tabs",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onBackground,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
             }
-        }
+        },
     ) { inner ->
         LazyColumn(
-            modifier = Modifier
-                .padding(inner)
-                .fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                horizontal = 20.dp,
-                vertical = 8.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier =
+                Modifier
+                    .padding(inner)
+                    .fillMaxSize(),
+            contentPadding =
+                androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 20.dp,
+                    vertical = 8.dp,
+                ),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             item {
                 Text(
                     text = "Drag to reorder. Tracks is always on.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
 
@@ -103,21 +107,31 @@ fun ManageTabsScreen(vm: AppViewModel, onBack: () -> Unit) {
                     canMoveDown = index < working.lastIndex,
                     onToggle = {
                         if (!setting.tab.isMandatory) {
-                            commit(working.mapIndexed { i, s ->
-                                if (i == index) s.copy(enabled = !s.enabled) else s
-                            })
+                            commit(
+                                working.mapIndexed { i, s ->
+                                    if (i == index) s.copy(enabled = !s.enabled) else s
+                                },
+                            )
                         }
                     },
                     onMoveUp = {
-                        if (index > 0) commit(working.toMutableList().apply {
-                            add(index - 1, removeAt(index))
-                        })
+                        if (index > 0) {
+                            commit(
+                                working.toMutableList().apply {
+                                    add(index - 1, removeAt(index))
+                                },
+                            )
+                        }
                     },
                     onMoveDown = {
-                        if (index < working.lastIndex) commit(working.toMutableList().apply {
-                            add(index + 1, removeAt(index))
-                        })
-                    }
+                        if (index < working.lastIndex) {
+                            commit(
+                                working.toMutableList().apply {
+                                    add(index + 1, removeAt(index))
+                                },
+                            )
+                        }
+                    },
                 )
             }
         }
@@ -131,29 +145,34 @@ private fun TabRow(
     canMoveDown: Boolean,
     onToggle: () -> Unit,
     onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit
+    onMoveDown: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             Icons.Rounded.DragHandle,
             contentDescription = "Drag",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.size(12.dp))
         Text(
             text = setting.tab.label,
             style = MaterialTheme.typography.titleLarge,
-            color = if (setting.enabled) MaterialTheme.colorScheme.onBackground
-            else MaterialTheme.colorScheme.onSurfaceVariant,
+            color =
+                if (setting.enabled) {
+                    MaterialTheme.colorScheme.onBackground
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
 
         // Up / down reorder controls
@@ -162,16 +181,24 @@ private fun TabRow(
                 Icon(
                     Icons.Rounded.KeyboardArrowUp,
                     "Move up",
-                    tint = if (canMoveUp) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    tint =
+                        if (canMoveUp) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        },
                 )
             }
             IconButton(onClick = onMoveDown, enabled = canMoveDown) {
                 Icon(
                     Icons.Rounded.KeyboardArrowDown,
                     "Move down",
-                    tint = if (canMoveDown) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    tint =
+                        if (canMoveDown) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        },
                 )
             }
         }
@@ -180,12 +207,13 @@ private fun TabRow(
             checked = setting.enabled,
             onCheckedChange = { onToggle() },
             enabled = !setting.tab.isMandatory,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.primary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+            colors =
+                SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
         )
     }
 }

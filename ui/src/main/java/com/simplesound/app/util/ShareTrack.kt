@@ -16,13 +16,17 @@ import com.simplesound.app.data.model.Track
  * or a `FileProvider`; doing so silently no-ops because the resulting
  * `java.io.File` never exists.
  */
-fun shareTrack(context: Context, track: Track) {
+fun shareTrack(
+    context: Context,
+    track: Track,
+) {
     if (track.uri.isBlank()) return
     val uri = Uri.parse(track.uri)
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "audio/*"
-        putExtra(Intent.EXTRA_STREAM, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
+    val intent =
+        Intent(Intent.ACTION_SEND).apply {
+            type = "audio/*"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
     context.startActivity(Intent.createChooser(intent, "Share \"${track.title}\""))
 }

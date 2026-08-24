@@ -45,12 +45,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.simplesound.app.data.DEFAULT_PLAYLIST_SORT
 import com.simplesound.app.data.model.PlaylistKind
+import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
-import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
 import com.simplesound.app.ui.components.AddToPlaylistDialog
+import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
 import com.simplesound.app.ui.components.Artwork
 import com.simplesound.app.ui.components.PlaylistSelectionActionBar
 import com.simplesound.app.ui.components.PlaylistTrackActionsSheet
@@ -67,7 +69,7 @@ fun PlaylistDetailScreen(
     vm: AppViewModel,
     playlistId: String,
     onBack: () -> Unit,
-    onOpenNowPlaying: () -> Unit = {}
+    onOpenNowPlaying: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val player = LocalPlayer.current
@@ -81,11 +83,15 @@ fun PlaylistDetailScreen(
     val userPlaylists by vm.userPlaylists.collectAsStateWithLifecycle()
     val allTracks by vm.tracks.collectAsStateWithLifecycle()
     val favoriteTrackIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
-    val playlist = remember(userPlaylists, allTracks, favoriteTrackIds, playlistId) {
-        vm.playlistById(playlistId)
-    }
+    val playlist =
+        remember(userPlaylists, allTracks, favoriteTrackIds, playlistId) {
+            vm.playlistById(playlistId)
+        }
 
-    if (playlist == null) { onBack(); return }
+    if (playlist == null) {
+        onBack()
+        return
+    }
     val playlistTracks = vm.tracksByIds(playlist.trackIds)
     // Persisted per-playlist sort: the chosen sort stays put across app restarts
     // and is never reset until the user explicitly changes it.
@@ -102,10 +108,11 @@ fun PlaylistDetailScreen(
     // must be CUSTOM_ORDER -- which sortPlaylistTracks() passes through unchanged
     // when no custom order is saved -- or first open would silently re-sort them
     // by date-added and hide the very ordering the playlist exists to show.
-    val defaultSort = when (playlist.kind) {
-        PlaylistKind.MOST_PLAYED, PlaylistKind.RECENTLY_PLAYED -> com.simplesound.app.data.model.SortOption.CUSTOM_ORDER
-        else -> com.simplesound.app.data.DEFAULT_PLAYLIST_SORT
-    }
+    val defaultSort =
+        when (playlist.kind) {
+            PlaylistKind.MOST_PLAYED, PlaylistKind.RECENTLY_PLAYED -> SortOption.CUSTOM_ORDER
+            else -> DEFAULT_PLAYLIST_SORT
+        }
     val playlistSortFlow = remember(playlistId) { vm.playlistSort(playlistId, defaultSort) }
     val sort by playlistSortFlow.collectAsStateWithLifecycle()
     // Bumped after each custom-order move so the list recomputes from the newly
@@ -113,9 +120,10 @@ fun PlaylistDetailScreen(
     // so we need an explicit recomposition trigger.)
     var customOrderVersion by remember { mutableStateOf(0) }
     val customOrderMode = sort == com.simplesound.app.data.model.SortOption.CUSTOM_ORDER
-    val tracks = remember(playlistTracks, sort, customOrderVersion) {
-        vm.sortPlaylistTracks(playlistId, playlistTracks, sort)
-    }
+    val tracks =
+        remember(playlistTracks, sort, customOrderVersion) {
+            vm.sortPlaylistTracks(playlistId, playlistTracks, sort)
+        }
     val editable = playlist.kind == PlaylistKind.USER
 
     var menuOpen by remember { mutableStateOf(false) }
@@ -133,14 +141,19 @@ fun PlaylistDetailScreen(
     var addOneTrack by remember { mutableStateOf<Track?>(null) }
     var detailsTrack by remember { mutableStateOf<Track?>(null) }
 
-    val selectedTracks: List<Track> = remember(selectedIds, tracks) {
-        val byId = tracks.associateBy { it.id }
-        selectedIds.mapNotNull { byId[it] }
-    }
+    val selectedTracks: List<Track> =
+        remember(selectedIds, tracks) {
+            val byId = tracks.associateBy { it.id }
+            selectedIds.mapNotNull { byId[it] }
+        }
+
     fun toggleSelected(id: Long) {
         selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
     }
-    fun clearSelection() { selectedIds = emptySet() }
+
+    fun clearSelection() {
+        selectedIds = emptySet()
+    }
 
     // Hide the global mini player while the selection action bar is on screen
     // so it can't intercept touches on top of the bar. Restore it on exit.
@@ -149,16 +162,17 @@ fun PlaylistDetailScreen(
         onDispose { vm.setMiniPlayerHidden(false) }
     }
 
-    val coverPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    val coverPicker =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.PickVisualMedia(),
+        ) { uri ->
+            if (uri != null) {
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                vm.setPlaylistCover(playlistId, uri.toString())
             }
-            vm.setPlaylistCover(playlistId, uri.toString())
         }
-    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -175,35 +189,42 @@ fun PlaylistDetailScreen(
                         IconButton(onClick = { vm.toggleFavoritePlaylist(playlistId) }) {
                             Icon(
                                 if (playlist.favorited) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                "Favorite", tint = MaterialTheme.colorScheme.primary
+                                "Favorite",
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         }
                         IconButton(onClick = { menuOpen = true }) {
                             Icon(Icons.Rounded.MoreVert, "More", tint = MaterialTheme.colorScheme.primary)
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(text = { Text("Rename") },
-                                onClick = { menuOpen = false; renaming = true })
+                            DropdownMenuItem(
+                                text = { Text("Rename") },
+                                onClick = {
+                                    menuOpen = false
+                                    renaming = true
+                                },
+                            )
                             DropdownMenuItem(text = { Text("Change cover") }, onClick = {
                                 menuOpen = false
                                 coverPicker.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                                 )
                             })
                             DropdownMenuItem(text = { Text("Delete playlist") }, onClick = {
-                                menuOpen = false; deleting = true
+                                menuOpen = false
+                                deleting = true
                             })
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
-        }
+        },
     ) { inner ->
         Box(Modifier.padding(inner).fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 160.dp)
+                contentPadding = PaddingValues(bottom = 160.dp),
             ) {
                 item {
                     Column(
@@ -212,20 +233,25 @@ fun PlaylistDetailScreen(
                             .padding(horizontal = 16.dp, vertical = 10.dp)
                             .liquidGlass(corner = 28.dp, bodyAlpha = 0.09f)
                             .padding(vertical = 18.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Artwork(uri = playlist.coverUri, modifier = Modifier.size(170.dp), corner = 20.dp, iconSize = 64.dp)
+                        Artwork(
+                            uri = playlist.coverUri,
+                            modifier = Modifier.size(170.dp),
+                            corner = 20.dp,
+                            iconSize = 64.dp,
+                        )
                         Spacer(Modifier.size(14.dp))
                         Text(
                             playlist.name,
                             style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
                         )
                         Text(
                             trackCountLabel(playlist.trackCount),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -234,7 +260,7 @@ fun PlaylistDetailScreen(
                         current = sort,
                         onSort = { vm.setPlaylistSort(playlistId, it) },
                         onShuffle = { if (tracks.isNotEmpty()) player.playQueue(tracks.shuffled(), 0, playlist.name) },
-                        onPlayAll = { if (tracks.isNotEmpty()) player.playQueue(tracks, 0, playlist.name) }
+                        onPlayAll = { if (tracks.isNotEmpty()) player.playQueue(tracks, 0, playlist.name) },
                     )
                 }
                 items(tracks, key = { it.id }) { track ->
@@ -259,16 +285,22 @@ fun PlaylistDetailScreen(
                         canMoveDown = selectionMode && index < tracks.lastIndex,
                         onMoveUp = {
                             vm.moveTrackInCustomOrder(
-                                playlistId, track.id, up = true, tracks.map { it.id }
+                                playlistId,
+                                track.id,
+                                up = true,
+                                tracks.map { it.id },
                             )
                             customOrderVersion++
                         },
                         onMoveDown = {
                             vm.moveTrackInCustomOrder(
-                                playlistId, track.id, up = false, tracks.map { it.id }
+                                playlistId,
+                                track.id,
+                                up = false,
+                                tracks.map { it.id },
                             )
                             customOrderVersion++
-                        }
+                        },
                     )
                 }
             }
@@ -292,7 +324,7 @@ fun PlaylistDetailScreen(
                     Toast.makeText(context, "Sharing is not available yet.", Toast.LENGTH_SHORT).show()
                 },
                 onRemove = { if (editable) showRemoveMany = true },
-                onClear = { clearSelection() }
+                onClear = { clearSelection() },
             )
         }
     }
@@ -300,16 +332,23 @@ fun PlaylistDetailScreen(
     if (renaming) {
         RenameDialog(
             initial = playlist.name,
-            onConfirm = { newName -> vm.renamePlaylist(playlistId, newName); renaming = false },
-            onDismiss = { renaming = false }
+            onConfirm = { newName ->
+                vm.renamePlaylist(playlistId, newName)
+                renaming = false
+            },
+            onDismiss = { renaming = false },
         )
     }
 
     if (deleting) {
         DeletePlaylistDialog(
             name = playlist.name,
-            onConfirm = { vm.deletePlaylist(playlistId); deleting = false; onBack() },
-            onDismiss = { deleting = false }
+            onConfirm = {
+                vm.deletePlaylist(playlistId)
+                deleting = false
+                onBack()
+            },
+            onDismiss = { deleting = false },
         )
     }
 
@@ -328,7 +367,7 @@ fun PlaylistDetailScreen(
                 clearSelection()
                 showAddMany = false
             },
-            onDismiss = { showAddMany = false }
+            onDismiss = { showAddMany = false },
         )
     }
 
@@ -341,7 +380,7 @@ fun PlaylistDetailScreen(
                 clearSelection()
                 showRemoveMany = false
             },
-            onDismiss = { showRemoveMany = false }
+            onDismiss = { showRemoveMany = false },
         )
     }
 
@@ -349,12 +388,18 @@ fun PlaylistDetailScreen(
     sheetTrack?.let { t ->
         PlaylistTrackActionsSheet(
             track = t,
-            onAddToPlaylist = { sheetTrack = null; addOneTrack = t },
+            onAddToPlaylist = {
+                sheetTrack = null
+                addOneTrack = t
+            },
             onRemoveFromPlaylist = {
                 if (editable) vm.removeTracksFromPlaylist(playlistId, listOf(t.id))
             },
-            onDetails = { sheetTrack = null; detailsTrack = t },
-            onDismiss = { sheetTrack = null }
+            onDetails = {
+                sheetTrack = null
+                detailsTrack = t
+            },
+            onDismiss = { sheetTrack = null },
         )
     }
 
@@ -366,7 +411,7 @@ fun PlaylistDetailScreen(
                 vm.addTracksToPlaylist(pl.id, listOf(t.id))
                 addOneTrack = null
             },
-            onDismiss = { addOneTrack = null }
+            onDismiss = { addOneTrack = null },
         )
     }
 
@@ -377,7 +422,11 @@ fun PlaylistDetailScreen(
 }
 
 @Composable
-private fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+private fun RenameDialog(
+    initial: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
     var name by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -387,7 +436,7 @@ private fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss
                 value = name,
                 onValueChange = { name = it },
                 singleLine = true,
-                label = { Text("Name") }
+                label = { Text("Name") },
             )
         },
         confirmButton = {
@@ -397,13 +446,17 @@ private fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+        },
     )
 }
 
 /** Confirmation dialog before permanently deleting a playlist. */
 @Composable
-private fun DeletePlaylistDialog(name: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+private fun DeletePlaylistDialog(
+    name: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -413,6 +466,6 @@ private fun DeletePlaylistDialog(name: String, onConfirm: () -> Unit, onDismiss:
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         title = { Text("Delete playlist") },
-        text = { Text("Delete \"$name\" and its tracks from this playlist? This cannot be undone.") }
+        text = { Text("Delete \"$name\" and its tracks from this playlist? This cannot be undone.") },
     )
 }

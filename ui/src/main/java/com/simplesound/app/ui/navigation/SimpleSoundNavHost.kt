@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -41,18 +41,20 @@ object Routes {
     const val PLAYLIST = "playlist"
     const val NOW_PLAYING = "now_playing"
     const val SEARCH = "search"
+
     fun playlist(id: String) = "$PLAYLIST/$id"
 }
 
 @Composable
 fun SimpleSoundNavHost(
     vm: AppViewModel,
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.systemBars)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars),
     ) {
         // Track the current destination so the mini player can hide itself on the
         // full-screen Now Playing route (which already shows full transport).
@@ -65,54 +67,54 @@ fun SimpleSoundNavHost(
         val miniPlayerHidden by vm.miniPlayerHidden.collectAsStateWithLifecycle()
 
         NavHost(navController = navController, startDestination = Routes.HOME) {
-        composable(Routes.HOME) {
-            HomeScreen(vm = vm, navController = navController)
-        }
-        composable(Routes.SETTINGS) {
-            SettingsScreen(
-                vm = vm,
-                onBack = { navController.popBackStack() },
-                onManageTabs = { navController.navigate(Routes.MANAGE_TABS) },
-                onAccentColor = { navController.navigate(Routes.ACCENT_COLOR) },
-                onSleepTimer = { navController.navigate(Routes.SLEEP_TIMER) },
-                onCrossfade = { navController.navigate(Routes.CROSSFADE) },
-                onAbout = { navController.navigate(Routes.ABOUT) }
-            )
-        }
-        composable(Routes.MANAGE_TABS) {
-            ManageTabsScreen(vm = vm, onBack = { navController.popBackStack() })
-        }
-        composable(Routes.ACCENT_COLOR) {
-            AccentColorScreen(vm = vm, onBack = { navController.popBackStack() })
-        }
-        composable(Routes.SLEEP_TIMER) {
-            SleepTimerScreen(onBack = { navController.popBackStack() })
-        }
-        composable(Routes.CROSSFADE) {
-            CrossfadeScreen(vm = vm, onBack = { navController.popBackStack() })
-        }
-        composable(Routes.ABOUT) {
-            AboutScreen(onBack = { navController.popBackStack() })
-        }
-        composable("${Routes.PLAYLIST}/{id}") { entry ->
-            val id = entry.arguments?.getString("id").orEmpty()
-            PlaylistDetailScreen(
-                vm = vm,
-                playlistId = id,
-                onBack = { navController.popBackStack() },
-                onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) }
-            )
-        }
-        composable(Routes.NOW_PLAYING) {
-            NowPlayingScreen(vm = vm, onBack = { navController.popBackStack() })
-        }
-        composable(Routes.SEARCH) {
-            SearchScreen(
-                vm = vm,
-                onBack = { navController.popBackStack() },
-                onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) }
-            )
-        }
+            composable(Routes.HOME) {
+                HomeScreen(vm = vm, navController = navController)
+            }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    vm = vm,
+                    onBack = { navController.popBackStack() },
+                    onManageTabs = { navController.navigate(Routes.MANAGE_TABS) },
+                    onAccentColor = { navController.navigate(Routes.ACCENT_COLOR) },
+                    onSleepTimer = { navController.navigate(Routes.SLEEP_TIMER) },
+                    onCrossfade = { navController.navigate(Routes.CROSSFADE) },
+                    onAbout = { navController.navigate(Routes.ABOUT) },
+                )
+            }
+            composable(Routes.MANAGE_TABS) {
+                ManageTabsScreen(vm = vm, onBack = { navController.popBackStack() })
+            }
+            composable(Routes.ACCENT_COLOR) {
+                AccentColorScreen(vm = vm, onBack = { navController.popBackStack() })
+            }
+            composable(Routes.SLEEP_TIMER) {
+                SleepTimerScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.CROSSFADE) {
+                CrossfadeScreen(vm = vm, onBack = { navController.popBackStack() })
+            }
+            composable(Routes.ABOUT) {
+                AboutScreen(onBack = { navController.popBackStack() })
+            }
+            composable("${Routes.PLAYLIST}/{id}") { entry ->
+                val id = entry.arguments?.getString("id").orEmpty()
+                PlaylistDetailScreen(
+                    vm = vm,
+                    playlistId = id,
+                    onBack = { navController.popBackStack() },
+                    onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) },
+                )
+            }
+            composable(Routes.NOW_PLAYING) {
+                NowPlayingScreen(vm = vm, onBack = { navController.popBackStack() })
+            }
+            composable(Routes.SEARCH) {
+                SearchScreen(
+                    vm = vm,
+                    onBack = { navController.popBackStack() },
+                    onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) },
+                )
+            }
         }
 
         // Global, persistent mini player pinned to the bottom of every screen.
@@ -128,7 +130,7 @@ fun SimpleSoundNavHost(
             Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                 MiniPlayer(
                     modifier = Modifier.navigationBarsPadding(),
-                    onClick = { navController.navigate(Routes.NOW_PLAYING) }
+                    onClick = { navController.navigate(Routes.NOW_PLAYING) },
                 )
             }
         }

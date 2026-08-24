@@ -1,6 +1,5 @@
 package com.simplesound.app.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -65,63 +63,71 @@ fun Modifier.liquidGlass(
     tint: Color = Color.Unspecified,
     bodyAlpha: Float = 0.10f,
     showGloss: Boolean = true,
-    showRim: Boolean = true
-): Modifier = this
-    .clip(RoundedCornerShape(corner))
-    .drawBehind {
-        val accent = if (tint == Color.Unspecified) Color.White else tint
-        // Gentle, low-contrast body. A smooth three-stop fade (bright top → mid
-        // neutral → dim bottom) keeps the glass even and diffuse, with no hard
-        // band of light in the middle.
-        val bodyTop = Color.White.copy(alpha = bodyAlpha * 1.15f)
-        val bodyMid = Color.White.copy(alpha = bodyAlpha * 0.45f)
-        val bodyBottom = Color.Black.copy(alpha = bodyAlpha * 0.9f)
+    showRim: Boolean = true,
+): Modifier =
+    this
+        .clip(RoundedCornerShape(corner))
+        .drawBehind {
+            val accent = if (tint == Color.Unspecified) Color.White else tint
+            // Gentle, low-contrast body. A smooth three-stop fade (bright top → mid
+            // neutral → dim bottom) keeps the glass even and diffuse, with no hard
+            // band of light in the middle.
+            val bodyTop = Color.White.copy(alpha = bodyAlpha * 1.15f)
+            val bodyMid = Color.White.copy(alpha = bodyAlpha * 0.45f)
+            val bodyBottom = Color.Black.copy(alpha = bodyAlpha * 0.9f)
 
-        // 1) Body — smooth vertical sheen of the glass.
-        drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(bodyTop, bodyMid, bodyBottom),
-                startY = 0f,
-                endY = size.height
-            )
-        )
-
-        // 2) Pooled gloss near the top, tinted by the accent so the glass
-        //    refracts the radiant glow behind it. Kept soft and wide so it pools
-        //    gently near the top edge rather than glaring. Opt-in via
-        //    [showGloss] — see its doc for why repeated rows skip this.
-        if (showGloss) {
-            val glossCenter = Offset(x = size.width * 0.5f, y = size.height * 0.20f)
+            // 1) Body — smooth vertical sheen of the glass.
             drawRect(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        accent.copy(alpha = bodyAlpha * 0.8f),
-                        Color.Transparent
+                brush =
+                    Brush.verticalGradient(
+                        colors = listOf(bodyTop, bodyMid, bodyBottom),
+                        startY = 0f,
+                        endY = size.height,
                     ),
-                    center = glossCenter,
-                    radius = size.minDimension * 0.95f,
-                    tileMode = TileMode.Clamp
+            )
+
+            // 2) Pooled gloss near the top, tinted by the accent so the glass
+            //    refracts the radiant glow behind it. Kept soft and wide so it pools
+            //    gently near the top edge rather than glaring. Opt-in via
+            //    [showGloss] — see its doc for why repeated rows skip this.
+            if (showGloss) {
+                val glossCenter = Offset(x = size.width * 0.5f, y = size.height * 0.20f)
+                drawRect(
+                    brush =
+                        Brush.radialGradient(
+                            colors =
+                                listOf(
+                                    accent.copy(alpha = bodyAlpha * 0.8f),
+                                    Color.Transparent,
+                                ),
+                            center = glossCenter,
+                            radius = size.minDimension * 0.95f,
+                            tileMode = TileMode.Clamp,
+                        ),
                 )
-            )
+            }
         }
-    }
-    // Soft inner rim via a translucent white hairline border (laid over content).
-    // Lowered top stop so the rim is a faint suggestion, not a bright edge.
-    // Opt-in via [showRim] — see its doc for why repeated rows skip this.
-    .let { mod ->
-        if (showRim) {
-            mod.border(
-                width = 0.75.dp,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.28f),
-                        Color.White.copy(alpha = 0.06f)
-                    )
-                ),
-                shape = RoundedCornerShape(corner)
-            )
-        } else mod
-    }
+        // Soft inner rim via a translucent white hairline border (laid over content).
+        // Lowered top stop so the rim is a faint suggestion, not a bright edge.
+        // Opt-in via [showRim] — see its doc for why repeated rows skip this.
+        .let { mod ->
+            if (showRim) {
+                mod.border(
+                    width = 0.75.dp,
+                    brush =
+                        Brush.verticalGradient(
+                            colors =
+                                listOf(
+                                    Color.White.copy(alpha = 0.28f),
+                                    Color.White.copy(alpha = 0.06f),
+                                ),
+                        ),
+                    shape = RoundedCornerShape(corner),
+                )
+            } else {
+                mod
+            }
+        }
 
 /**
  * A tinted drop shadow painted behind a glass surface to give it lift without
@@ -130,21 +136,23 @@ fun Modifier.liquidGlass(
  */
 fun Modifier.glassShadow(
     tint: Color = Color.Unspecified,
-    spread: Dp = 18.dp
-): Modifier = this.drawBehind {
-    if (tint == Color.Unspecified) return@drawBehind
-    val px = spread.toPx()
-    drawRoundRect(
-        color = tint.copy(alpha = 0.18f),
-        topLeft = Offset(x = -px, y = -px * 0.5f),
-        size = androidx.compose.ui.geometry.Size(
-            width = size.width + px * 2,
-            height = size.height + px
-        ),
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(px, px),
-        alpha = 0.6f
-    )
-}
+    spread: Dp = 18.dp,
+): Modifier =
+    this.drawBehind {
+        if (tint == Color.Unspecified) return@drawBehind
+        val px = spread.toPx()
+        drawRoundRect(
+            color = tint.copy(alpha = 0.18f),
+            topLeft = Offset(x = -px, y = -px * 0.5f),
+            size =
+                androidx.compose.ui.geometry.Size(
+                    width = size.width + px * 2,
+                    height = size.height + px,
+                ),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(px, px),
+            alpha = 0.6f,
+        )
+    }
 
 /**
  * Convenience wrapper: a [Box] pre-skinned with liquid glass over the radiant
@@ -155,16 +163,17 @@ fun LiquidGlassBox(
     modifier: Modifier = Modifier,
     corner: Dp = 22.dp,
     bodyAlpha: Float = 0.10f,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .liquidGlass(
-                corner = corner,
-                tint = MaterialTheme.colorScheme.primary,
-                bodyAlpha = bodyAlpha
-            )
+        modifier =
+            modifier
+                .fillMaxSize()
+                .liquidGlass(
+                    corner = corner,
+                    tint = MaterialTheme.colorScheme.primary,
+                    bodyAlpha = bodyAlpha,
+                ),
     ) {
         Box(modifier = Modifier.fillMaxSize()) { content() }
     }

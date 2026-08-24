@@ -15,7 +15,7 @@ data class Track(
     val folder: String = "",
     val dateAddedSec: Long = 0L,
     val playCount: Int = 0,
-    val lastPlayedSec: Long = 0L
+    val lastPlayedSec: Long = 0L,
 ) {
     val artistOrUnknown: String get() = artist.ifBlank { "<unknown>" }
     val albumOrUnknown: String get() = album.ifBlank { "<unknown>" }

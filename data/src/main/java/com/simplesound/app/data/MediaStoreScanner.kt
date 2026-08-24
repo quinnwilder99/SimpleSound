@@ -29,19 +29,19 @@ import java.io.File
  * art first and only falls back to this when no embedded picture exists.
  */
 object MediaStoreScanner {
-
     fun scan(context: Context): List<Track> {
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.DATA,
-            MediaStore.Audio.Media.DATE_ADDED
-        )
+        val projection =
+            arrayOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.Audio.Media.ALBUM_ID,
+                MediaStore.Audio.Media.DURATION,
+                MediaStore.Audio.Media.DATA,
+                MediaStore.Audio.Media.DATE_ADDED,
+            )
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
 
@@ -64,21 +64,24 @@ object MediaStoreScanner {
                 val albumId = c.getLong(albumIdCol)
                 // Album-level fallback only. Embedded (per-track) art is read
                 // from `uri`/`contentUri` by the UI via MediaMetadataRetriever.
-                val albumArtUri = ContentUris.withAppendedId(
-                    android.net.Uri.parse("content://media/external/audio/albumart"), albumId
-                ).toString()
+                val albumArtUri =
+                    ContentUris.withAppendedId(
+                        android.net.Uri.parse("content://media/external/audio/albumart"),
+                        albumId,
+                    ).toString()
 
-                result += Track(
-                    id = id,
-                    title = c.getString(titleCol) ?: "<unknown>",
-                    artist = c.getString(artistCol).orEmpty(),
-                    album = c.getString(albumCol).orEmpty(),
-                    durationMs = c.getLong(durationCol),
-                    uri = contentUri,
-                    albumArtUri = albumArtUri,
-                    folder = folder,
-                    dateAddedSec = c.getLong(dateCol)
-                )
+                result +=
+                    Track(
+                        id = id,
+                        title = c.getString(titleCol) ?: "<unknown>",
+                        artist = c.getString(artistCol).orEmpty(),
+                        album = c.getString(albumCol).orEmpty(),
+                        durationMs = c.getLong(durationCol),
+                        uri = contentUri,
+                        albumArtUri = albumArtUri,
+                        folder = folder,
+                        dateAddedSec = c.getLong(dateCol),
+                    )
             }
         }
         return result

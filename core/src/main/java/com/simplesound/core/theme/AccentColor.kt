@@ -26,11 +26,12 @@ enum class AccentColor {
     Rose,
     Lime,
     Sky,
-    Sand;
+    Sand,
+    ;
 
     companion object {
         val Default = Graphite
-        fun fromName(name: String?): AccentColor =
-            entries.firstOrNull { it.name == name } ?: Default
+
+        fun fromName(name: String?): AccentColor = entries.firstOrNull { it.name == name } ?: Default
     }
 }

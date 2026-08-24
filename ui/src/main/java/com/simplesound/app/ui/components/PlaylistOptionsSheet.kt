@@ -37,7 +37,7 @@ fun PlaylistOptionsSheet(
     onAdd: () -> Unit,
     onShare: () -> Unit,
     onRemove: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
@@ -45,23 +45,41 @@ fun PlaylistOptionsSheet(
                 playlist.name,
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
-            Item(Icons.Rounded.PlayArrow, "Play") { onPlay(); onDismiss() }
-            Item(Icons.Rounded.PlaylistAdd, "Add") { onAdd(); onDismiss() }
-            Item(Icons.Rounded.Share, "Share") { onShare(); onDismiss() }
-            Item(Icons.Rounded.Delete, "Remove", destructive = true) { onRemove(); onDismiss() }
+            Item(Icons.Rounded.PlayArrow, "Play") {
+                onPlay()
+                onDismiss()
+            }
+            Item(Icons.Rounded.PlaylistAdd, "Add") {
+                onAdd()
+                onDismiss()
+            }
+            Item(Icons.Rounded.Share, "Share") {
+                onShare()
+                onDismiss()
+            }
+            Item(Icons.Rounded.Delete, "Remove", destructive = true) {
+                onRemove()
+                onDismiss()
+            }
         }
     }
 }
 
 @Composable
-private fun Item(icon: ImageVector, label: String, destructive: Boolean = false, onClick: () -> Unit) {
+private fun Item(
+    icon: ImageVector,
+    label: String,
+    destructive: Boolean = false,
+    onClick: () -> Unit,
+) {
     val tint = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier.fillMaxWidth().clickable(onClick = onClick)
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(18.dp))

@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHostController
 import com.simplesound.app.data.model.Playlist
 import com.simplesound.app.data.model.PlaylistKind
 import com.simplesound.app.ui.AppViewModel
@@ -22,7 +23,6 @@ import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.PlaylistGridCard
 import com.simplesound.app.ui.components.PlaylistOptionsSheet
 import com.simplesound.app.ui.navigation.Routes
-import androidx.navigation.NavHostController
 
 /**
  * Favorites tab: a 2-column grid of playlists. "Favorite tracks" is always first;
@@ -30,7 +30,10 @@ import androidx.navigation.NavHostController
  * Play / Add / Share / Remove options.
  */
 @Composable
-fun FavoritesScreen(vm: AppViewModel, navController: NavHostController) {
+fun FavoritesScreen(
+    vm: AppViewModel,
+    navController: NavHostController,
+) {
     val context = LocalContext.current
     val player = LocalPlayer.current
     val playlists by vm.favoritesTabPlaylists.collectAsStateWithLifecycle()
@@ -40,14 +43,14 @@ fun FavoritesScreen(vm: AppViewModel, navController: NavHostController) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
     ) {
         items(playlists, key = { it.id }) { pl ->
             PlaylistGridCard(
                 playlist = pl,
                 shaking = optionsFor?.id == pl.id,
                 onClick = { navController.navigate(Routes.playlist(pl.id)) },
-                onLongPress = { optionsFor = pl }
+                onLongPress = { optionsFor = pl },
             )
         }
     }
@@ -58,17 +61,18 @@ fun FavoritesScreen(vm: AppViewModel, navController: NavHostController) {
             onPlay = { player.playQueue(vm.tracksByIds(pl.trackIds), 0) },
             onAdd = { player.playQueue(vm.tracksByIds(pl.trackIds), 0) },
             onShare = {
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "Check out my playlist \"${pl.name}\" on simpleSOUND")
-                }
+                val send =
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "Check out my playlist \"${pl.name}\" on simpleSOUND")
+                    }
                 context.startActivity(Intent.createChooser(send, "Share playlist"))
             },
             onRemove = {
                 // On the Favorites tab, Remove un-hearts a user playlist (it leaves this tab).
                 if (pl.kind == PlaylistKind.USER) vm.toggleFavoritePlaylist(pl.id)
             },
-            onDismiss = { optionsFor = null }
+            onDismiss = { optionsFor = null },
         )
     }
 }

@@ -14,6 +14,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.SettingsStore
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,8 +22,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
+    @Inject lateinit var settingsStore: SettingsStore
+
+    @Inject lateinit var musicRepository: MusicRepository
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
@@ -43,6 +49,7 @@ class PlaybackService : MediaSessionService() {
     private var crossfadePlayer: ExoPlayer? = null
     private var crossfadeRampRunnable: Runnable? = null
     private var crossfadeWatchRunnable: Runnable? = null
+
     // Set right before *we* programmatically skip `player` ahead to start a
     // crossfade, so the resulting onMediaItemTransition callback (fired for that
     // same skip) isn't mistaken for a user-initiated skip and doesn't cancel the
@@ -58,17 +65,21 @@ class PlaybackService : MediaSessionService() {
     private var recordPlayRunnable: Runnable? = null
     private var recordedCurrentItem = false
 
-    private val playRecordListener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) scheduleRecordPlay() else cancelScheduledRecordPlay()
-        }
+    private val playRecordListener =
+        object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) scheduleRecordPlay() else cancelScheduledRecordPlay()
+            }
 
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            cancelScheduledRecordPlay()
-            recordedCurrentItem = false
-            if (player.isPlaying) scheduleRecordPlay()
+            override fun onMediaItemTransition(
+                mediaItem: MediaItem?,
+                reason: Int,
+            ) {
+                cancelScheduledRecordPlay()
+                recordedCurrentItem = false
+                if (player.isPlaying) scheduleRecordPlay()
+            }
         }
-    }
 
     private fun scheduleRecordPlay() {
         if (recordedCurrentItem) return
@@ -88,56 +99,61 @@ class PlaybackService : MediaSessionService() {
         if (recordedCurrentItem) return
         val trackId = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
         recordedCurrentItem = true
-        MusicRepository.recordTrackPlayed(trackId)
+        musicRepository.recordTrackPlayed(trackId)
     }
 
-    private val crossfadeListener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) {
-                startCrossfadeWatcher()
-                return
+    private val crossfadeListener =
+        object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    startCrossfadeWatcher()
+                    return
+                }
+                stopCrossfadeWatcher()
+                // isPlaying also dips false for a moment while a new item buffers --
+                // notably right after our own seekToNextMediaItem() below, which would
+                // otherwise cancel the fade it just started. playWhenReady tells the
+                // two apart: only a genuine pause (user, sleep timer) clears it, so
+                // the app lands cleanly rather than stuck partway through a fade the
+                // user can't see progressing.
+                if (!player.playWhenReady) cancelActiveCrossfade()
             }
-            stopCrossfadeWatcher()
-            // isPlaying also dips false for a moment while a new item buffers --
-            // notably right after our own seekToNextMediaItem() below, which would
-            // otherwise cancel the fade it just started. playWhenReady tells the
-            // two apart: only a genuine pause (user, sleep timer) clears it, so
-            // the app lands cleanly rather than stuck partway through a fade the
-            // user can't see progressing.
-            if (!player.playWhenReady) cancelActiveCrossfade()
+
+            override fun onMediaItemTransition(
+                mediaItem: MediaItem?,
+                reason: Int,
+            ) {
+                if (suppressNextTransitionCancel) {
+                    // This is the transition *we* caused by seeking `player` ahead in
+                    // maybeStartCrossfade() -- the fade is already running, so leave it be.
+                    suppressNextTransitionCancel = false
+                    return
+                }
+                // Any other transition (user tapped next/previous, the track ended
+                // naturally with crossfade off, a queue edit) means a fade already in
+                // flight is now describing a track we've left -- drop it immediately
+                // rather than let a stale shadow player keep talking underneath.
+                cancelActiveCrossfade()
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                cancelActiveCrossfade()
+            }
         }
 
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            if (suppressNextTransitionCancel) {
-                // This is the transition *we* caused by seeking `player` ahead in
-                // maybeStartCrossfade() -- the fade is already running, so leave it be.
-                suppressNextTransitionCancel = false
-                return
+    private val ticker =
+        object : Runnable {
+            override fun run() {
+                val remaining = sleepEndElapsed - SystemClock.elapsedRealtime()
+                if (remaining <= 0L) {
+                    _sleepTimerRemainingMs.value = 0L
+                    fireSleepTimer()
+                    return
+                }
+                _sleepTimerRemainingMs.value = remaining
+                sleepHandler.postDelayed(this, 1_000L)
             }
-            // Any other transition (user tapped next/previous, the track ended
-            // naturally with crossfade off, a queue edit) means a fade already in
-            // flight is now describing a track we've left -- drop it immediately
-            // rather than let a stale shadow player keep talking underneath.
-            cancelActiveCrossfade()
         }
-
-        override fun onPlayerError(error: PlaybackException) {
-            cancelActiveCrossfade()
-        }
-    }
-
-    private val ticker = object : Runnable {
-        override fun run() {
-            val remaining = sleepEndElapsed - SystemClock.elapsedRealtime()
-            if (remaining <= 0L) {
-                _sleepTimerRemainingMs.value = 0L
-                fireSleepTimer()
-                return
-            }
-            _sleepTimerRemainingMs.value = remaining
-            sleepHandler.postDelayed(this, 1_000L)
-        }
-    }
 
     private val sleepPrefs by lazy {
         getSharedPreferences(SLEEP_PREFS, android.content.Context.MODE_PRIVATE)
@@ -145,24 +161,25 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        player = ExoPlayer.Builder(this)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .build(),
-                true
-            )
-            .setHandleAudioBecomingNoisy(true)
-            .build()
+        player =
+            ExoPlayer.Builder(this)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(C.USAGE_MEDIA)
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .build(),
+                    true,
+                )
+                .setHandleAudioBecomingNoisy(true)
+                .build()
         player.addListener(crossfadeListener)
         player.addListener(playRecordListener)
-        mediaSession = MediaSession.Builder(this, player)
-            .setBitmapLoader(TrackArtworkBitmapLoader(this))
-            .build()
+        mediaSession =
+            MediaSession.Builder(this, player)
+                .setBitmapLoader(TrackArtworkBitmapLoader(this))
+                .build()
         restoreSleepTimerIfNeeded()
 
-        val settingsStore = SettingsStore(applicationContext)
         serviceScope.launch {
             settingsStore.crossfadeSeconds.collect { seconds ->
                 crossfadeSeconds = seconds
@@ -173,7 +190,11 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         when (intent?.action) {
             ACTION_SET_SLEEP_TIMER -> {
                 val minutes = intent.getIntExtra(EXTRA_MINUTES, 0)
@@ -247,13 +268,14 @@ class PlaybackService : MediaSessionService() {
      *  the moment the current track enters its last [crossfadeSeconds]. */
     private fun startCrossfadeWatcher() {
         if (crossfadeWatchRunnable != null) return
-        val r = object : Runnable {
-            override fun run() {
-                maybeStartCrossfade()
-                crossfadeWatchRunnable = this
-                sleepHandler.postDelayed(this, 200L)
+        val r =
+            object : Runnable {
+                override fun run() {
+                    maybeStartCrossfade()
+                    crossfadeWatchRunnable = this
+                    sleepHandler.postDelayed(this, 200L)
+                }
             }
-        }
         crossfadeWatchRunnable = r
         sleepHandler.post(r)
     }
@@ -306,24 +328,29 @@ class PlaybackService : MediaSessionService() {
     }
 
     /** Linearly fades `player` in (0 -> [targetVolume]) while fading [shadow] out, in 50ms steps. */
-    private fun rampCrossfade(durationMs: Long, shadow: ExoPlayer, targetVolume: Float) {
+    private fun rampCrossfade(
+        durationMs: Long,
+        shadow: ExoPlayer,
+        targetVolume: Float,
+    ) {
         val steps = (durationMs / 50L).coerceAtLeast(1)
         var step = 0
-        val r = object : Runnable {
-            override fun run() {
-                if (crossfadePlayer !== shadow) return // superseded/cancelled
-                step++
-                val t = (step.toFloat() / steps).coerceIn(0f, 1f)
-                player.volume = t * targetVolume
-                shadow.volume = (1f - t) * targetVolume
-                if (t >= 1f) {
-                    finishCrossfade(shadow)
-                } else {
-                    crossfadeRampRunnable = this
-                    sleepHandler.postDelayed(this, 50L)
+        val r =
+            object : Runnable {
+                override fun run() {
+                    if (crossfadePlayer !== shadow) return // superseded/cancelled
+                    step++
+                    val t = (step.toFloat() / steps).coerceIn(0f, 1f)
+                    player.volume = t * targetVolume
+                    shadow.volume = (1f - t) * targetVolume
+                    if (t >= 1f) {
+                        finishCrossfade(shadow)
+                    } else {
+                        crossfadeRampRunnable = this
+                        sleepHandler.postDelayed(this, 50L)
+                    }
                 }
             }
-        }
         crossfadeRampRunnable = r
         sleepHandler.postDelayed(r, 50L)
     }
@@ -355,7 +382,7 @@ class PlaybackService : MediaSessionService() {
                     .setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .build(),
-                false
+                false,
             )
             .build()
 

@@ -29,10 +29,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.ui.AppViewModel
-import com.simplesound.core.theme.AccentColor
 import com.simplesound.app.ui.theme.color
 import com.simplesound.app.ui.theme.gradient
 import com.simplesound.app.ui.theme.label
+import com.simplesound.core.theme.AccentColor
 
 /**
  * Accent color picker sub-page of Settings. Lets the user choose the app's
@@ -40,63 +40,68 @@ import com.simplesound.app.ui.theme.label
  * with 5 choices per row.
  */
 @Composable
-fun AccentColorScreen(vm: AppViewModel, onBack: () -> Unit) {
+fun AccentColorScreen(
+    vm: AppViewModel,
+    onBack: () -> Unit,
+) {
     val accent by vm.accent.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
                         Icons.AutoMirrored.Rounded.ArrowBack,
                         "Back",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
                 Text(
                     text = "Accent color",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onBackground,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
             }
-        }
+        },
     ) { inner ->
         Column(
-            modifier = Modifier
-                .padding(inner)
-                .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+            modifier =
+                Modifier
+                    .padding(inner)
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
         ) {
             Text(
                 text = "Choose the app's highlight color",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.size(20.dp))
             // 5 swatches per row; as many rows as needed (e.g. 5 + 5 + 3).
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 AccentColor.entries.chunked(5).forEach { rowColors ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         rowColors.forEach { color ->
                             AccentSwatch(
                                 color = color,
                                 selected = color == accent,
                                 onClick = { vm.setAccent(color) },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
                             )
                         }
                     }
@@ -111,39 +116,44 @@ private fun AccentSwatch(
     color: AccentColor,
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .then(
-                    color.gradient?.let { Modifier.background(it) }
-                        ?: Modifier.background(color.color)
-                )
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .then(
+                        color.gradient?.let { Modifier.background(it) }
+                            ?: Modifier.background(color.color),
+                    )
+                    .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
         ) {
             if (selected) {
                 Box(
                     Modifier
                         .size(16.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.85f))
+                        .background(Color.White.copy(alpha = 0.85f)),
                 )
             }
         }
         Text(
             text = color.label,
             style = MaterialTheme.typography.labelMedium,
-            color = if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+            color =
+                if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )
     }
 }

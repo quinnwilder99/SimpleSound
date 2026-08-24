@@ -59,7 +59,11 @@ import com.simplesound.app.util.shareTrack
  * clear the selection via the bottom action bar.
  */
 @Composable
-fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> Unit = {}) {
+fun SearchScreen(
+    vm: AppViewModel,
+    onBack: () -> Unit,
+    onOpenNowPlaying: () -> Unit = {},
+) {
     val player = LocalPlayer.current
     val context = LocalContext.current
     val favoriteIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
@@ -79,16 +83,21 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
     var showAddMany by remember { mutableStateOf(false) }
     var showDeleteMany by remember { mutableStateOf(false) }
 
-    val selectedTracks: List<Track> = remember(selectedIds, results) {
-        val byId = results.associateBy { it.id }
-        selectedIds.mapNotNull { byId[it] }
-    }
+    val selectedTracks: List<Track> =
+        remember(selectedIds, results) {
+            val byId = results.associateBy { it.id }
+            selectedIds.mapNotNull { byId[it] }
+        }
 
     fun toggleSelected(id: Long) {
         selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
     }
-    fun clearSelection() { selectedIds = emptySet() }
+
+    fun clearSelection() {
+        selectedIds = emptySet()
+    }
     val allSelected = results.isNotEmpty() && selectedIds.size == results.size
+
     fun toggleSelectAll() {
         selectedIds = if (allSelected) emptySet() else results.map { it.id }.toSet()
     }
@@ -99,12 +108,13 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
     // Drive the global mini-player hidden flag from this screen's selection/dialog
     // state so the persistent mini player can't overlay and intercept touches over
     // the bottom selection action bar or any modal sheet/dialog.
-    val anyOverlayOpen = selectionMode ||
-        sheetTrack != null ||
-        addTrack != null ||
-        detailsTrack != null ||
-        showAddMany ||
-        showDeleteMany
+    val anyOverlayOpen =
+        selectionMode ||
+            sheetTrack != null ||
+            addTrack != null ||
+            detailsTrack != null ||
+            showAddMany ||
+            showDeleteMany
     LaunchedEffect(anyOverlayOpen) {
         vm.setMiniPlayerHidden(anyOverlayOpen)
     }
@@ -118,30 +128,32 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 8.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
                         Icons.Rounded.ArrowBack,
                         contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
                     placeholder = { Text("Search songs, artists, albums") },
                     leadingIcon = {
                         Icon(
                             Icons.Rounded.Search,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     },
                     trailingIcon = {
@@ -150,16 +162,16 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
                                 Icon(
                                     Icons.Rounded.Clear,
                                     contentDescription = "Clear search",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                     },
                     singleLine = true,
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
                 )
             }
-        }
+        },
     ) { inner ->
         Box(Modifier.padding(inner).fillMaxSize()) {
             if (results.isEmpty()) {
@@ -167,27 +179,28 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
                     text = if (query.isBlank()) "Type to search your library" else "No results for \"$query\"",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center)
+                    modifier = Modifier.align(Alignment.Center),
                 )
             } else {
                 Column(Modifier.fillMaxSize()) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = "${results.size} result" + if (results.size == 1) "" else "s",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
                         TextButton(onClick = { toggleSelectAll() }) {
                             Icon(
                                 if (allSelected) Icons.Rounded.Deselect else Icons.Rounded.SelectAll,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(if (allSelected) "Deselect all" else "Select all")
@@ -209,7 +222,7 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
                                         onOpenNowPlaying()
                                     }
                                 },
-                                onMore = { sheetTrack = track }
+                                onMore = { sheetTrack = track },
                             )
                         }
                     }
@@ -229,7 +242,7 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
                 onAdd = { showAddMany = true },
                 onDelete = { showDeleteMany = true },
                 onClear = { clearSelection() },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
     }
@@ -241,19 +254,28 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
             isFavorite = t.id in favoriteIds,
             onPlay = { player.playSingle(t) },
             onToggleFavorite = { vm.toggleFavoriteTrack(t.id) },
-            onAddToPlaylist = { addTrack = t; sheetTrack = null },
+            onAddToPlaylist = {
+                addTrack = t
+                sheetTrack = null
+            },
             onDelete = { /* delete not offered from search */ },
             onShare = { shareTrack(context, t) },
-            onDetails = { detailsTrack = t; sheetTrack = null },
-            onDismiss = { sheetTrack = null }
+            onDetails = {
+                detailsTrack = t
+                sheetTrack = null
+            },
+            onDismiss = { sheetTrack = null },
         )
     }
 
     addTrack?.let { t ->
         AddToPlaylistDialog(
             playlists = userPlaylists,
-            onPick = { pl -> vm.addTracksToPlaylist(pl.id, listOf(t.id)); addTrack = null },
-            onDismiss = { addTrack = null }
+            onPick = { pl ->
+                vm.addTracksToPlaylist(pl.id, listOf(t.id))
+                addTrack = null
+            },
+            onDismiss = { addTrack = null },
         )
     }
 
@@ -276,7 +298,7 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
                 clearSelection()
                 showAddMany = false
             },
-            onDismiss = { showAddMany = false }
+            onDismiss = { showAddMany = false },
         )
     }
 
@@ -288,7 +310,7 @@ fun SearchScreen(vm: AppViewModel, onBack: () -> Unit, onOpenNowPlaying: () -> U
                 clearSelection()
                 showDeleteMany = false
             },
-            onDismiss = { showDeleteMany = false }
+            onDismiss = { showDeleteMany = false },
         )
     }
 }

@@ -53,37 +53,47 @@ fun TrackRow(
     canMoveUp: Boolean = true,
     canMoveDown: Boolean = true,
     onMoveUp: () -> Unit = {},
-    onMoveDown: () -> Unit = {}
+    onMoveDown: () -> Unit = {},
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp)
-            // Full glass (gloss + rim) is reserved for the selected state, where
-            // it earns its keep by marking exactly which rows are picked. At
-            // rest, dozens of rows stacked in a list would otherwise turn into
-            // a wall of hairline borders — so unselected rows get only a very
-            // faint flat wash, quiet enough to not compete with the artwork
-            // and text that actually carry the row.
-            .liquidGlass(
-                corner = 20.dp,
-                tint = if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                bodyAlpha = if (selected) 0.16f else 0.05f,
-                showGloss = selected,
-                showRim = selected
-            )
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+                // Full glass (gloss + rim) is reserved for the selected state, where
+                // it earns its keep by marking exactly which rows are picked. At
+                // rest, dozens of rows stacked in a list would otherwise turn into
+                // a wall of hairline borders — so unselected rows get only a very
+                // faint flat wash, quiet enough to not compete with the artwork
+                // and text that actually carry the row.
+                .liquidGlass(
+                    corner = 20.dp,
+                    tint =
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    bodyAlpha = if (selected) 0.16f else 0.05f,
+                    showGloss = selected,
+                    showRim = selected,
+                )
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.Center) {
             if (selectionMode) {
                 Icon(
                     imageVector = if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                     contentDescription = if (selected) "Selected" else "Not selected",
-                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(30.dp)
+                    tint =
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    modifier = Modifier.size(30.dp),
                 )
             } else {
                 // embeddedSource = track.uri so Artwork decodes the per-track
@@ -92,7 +102,7 @@ fun TrackRow(
                 Artwork(
                     uri = track.albumArtUri,
                     embeddedSource = track.uri,
-                    modifier = Modifier.size(52.dp)
+                    modifier = Modifier.size(52.dp),
                 )
             }
         }
@@ -103,14 +113,14 @@ fun TrackRow(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = track.artistOrUnknown,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
         when {
@@ -119,22 +129,30 @@ fun TrackRow(
             selectionMode && customOrderMode -> {
                 Row(
                     horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onMoveUp, enabled = canMoveUp) {
                         Icon(
                             Icons.Rounded.ArrowUpward,
                             contentDescription = "Move up",
-                            tint = if (canMoveUp) MaterialTheme.colorScheme.onSurfaceVariant
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            tint =
+                                if (canMoveUp) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                },
                         )
                     }
                     IconButton(onClick = onMoveDown, enabled = canMoveDown) {
                         Icon(
                             Icons.Rounded.ArrowDownward,
                             contentDescription = "Move down",
-                            tint = if (canMoveDown) MaterialTheme.colorScheme.onSurfaceVariant
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            tint =
+                                if (canMoveDown) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                },
                         )
                     }
                 }
@@ -148,7 +166,7 @@ fun TrackRow(
                     Icon(
                         Icons.Rounded.MoreVert,
                         contentDescription = "More options",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

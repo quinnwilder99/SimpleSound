@@ -1,0 +1,12 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>LongParameterList:MusicRepository.kt$MusicRepository$( @ApplicationContext private val context: Context, private val trackDao: TrackDao, private val playlistDao: PlaylistDao, private val playlistTrackDao: PlaylistTrackDao, private val favoriteDao: FavoriteDao, private val playStatsDao: PlayStatsDao, private val customOrderDao: CustomOrderDao, )</ID>
+    <ID>ReturnCount:MusicRepository.kt$MusicRepository$fun lastQueueTrackIds(): List&lt;Long&gt;</ID>
+    <ID>ReturnCount:MusicRepository.kt$MusicRepository$fun sortPlaylistTracks( playlistId: String, tracks: List&lt;Track&gt;, option: SortOption, ): List&lt;Track&gt;</ID>
+    <ID>ReturnCount:MusicRepository.kt$MusicRepository$private fun decodeLegacyFavoriteTrackIds(raw: String?): Set&lt;Long&gt;?</ID>
+    <ID>SwallowedException:LibrarySyncWorker.kt$LibrarySyncWorker$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:LibrarySyncWorker.kt$LibrarySyncWorker$t: Throwable</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -30,7 +31,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.RoundedCornerShape
 import com.simplesound.app.data.model.Track
 
 /**
@@ -56,7 +56,7 @@ fun QueueSheet(
     onPlay: (index: Int) -> Unit,
     onMove: (from: Int, to: Int) -> Unit,
     onRemove: (index: Int) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
     val title = queueTitle.ifBlank { "Queue" }
@@ -64,18 +64,19 @@ fun QueueSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 24.dp),
         ) {
             // Header: context this queue came from + count.
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -83,25 +84,26 @@ fun QueueSheet(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    val countText = if (queue.isEmpty()) {
-                        "Empty"
-                    } else {
-                        val pos = (currentIndex + 1).coerceIn(1, queue.size)
-                        "$pos of ${queue.size}"
-                    }
+                    val countText =
+                        if (queue.isEmpty()) {
+                            "Empty"
+                        } else {
+                            val pos = (currentIndex + 1).coerceIn(1, queue.size)
+                            "$pos of ${queue.size}"
+                        }
                     Text(
                         text = countText,
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 IconButton(onClick = onDismiss) {
                     Icon(
                         Icons.Rounded.Close,
                         contentDescription = "Close queue",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -109,16 +111,17 @@ fun QueueSheet(
 
             if (queue.isEmpty()) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(160.dp),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(160.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = "No tracks in queue",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
                     )
                 }
             } else {
@@ -133,7 +136,7 @@ fun QueueSheet(
                             onPlay = { onPlay(index) },
                             onMoveUp = { onMove(index, index - 1) },
                             onMoveDown = { onMove(index, index + 1) },
-                            onRemove = { onRemove(index) }
+                            onRemove = { onRemove(index) },
                         )
                     }
                 }
@@ -151,45 +154,51 @@ private fun QueueRow(
     onPlay: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // Artwork / playing indicator
         Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
             Artwork(
                 uri = track.albumArtUri,
                 embeddedSource = track.uri,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(44.dp),
             )
         }
         Spacer(Modifier.width(12.dp))
 
         // Title + artist (tap to play)
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(vertical = 6.dp)
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(vertical = 6.dp),
         ) {
             Text(
                 text = track.title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (isCurrent) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onBackground,
+                color =
+                    if (isCurrent) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onBackground
+                    },
                 fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = track.artistOrUnknown,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
         // Play-on-tap affordance via the title block
@@ -197,29 +206,33 @@ private fun QueueRow(
             Icon(
                 Icons.Rounded.MusicNote,
                 contentDescription = "Play ${track.title}",
-                tint = if (isCurrent) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
+                tint =
+                    if (isCurrent) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
         }
         IconButton(onClick = onMoveUp, enabled = canMoveUp) {
             Icon(
                 Icons.Rounded.ArrowUpward,
                 contentDescription = "Move up",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         IconButton(onClick = onMoveDown, enabled = canMoveDown) {
             Icon(
                 Icons.Rounded.ArrowDownward,
                 contentDescription = "Move down",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         IconButton(onClick = onRemove) {
             Icon(
                 Icons.Rounded.Close,
                 contentDescription = "Remove from queue",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
