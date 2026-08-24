@@ -24,7 +24,7 @@ coroutinesTest = "1.9.0"
 turbine = "1.2.0"
 robolectric = "4.13"
 composeUiTest = "1.7.4"
-espresso = "3.6.1"
+espresso = "3.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

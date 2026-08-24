@@ -72,7 +72,14 @@ class ManageTabsScreenTest {
         composeRule.onAllNodes(isToggleable())[favoritesIndex].assertIsOn()
 
         composeRule.onAllNodes(isToggleable())[favoritesIndex].performClick()
-        composeRule.waitForIdle()
+
+        // The Switch's onCheckedChange writes through to DataStore asynchronously
+        // (vm.setTabSettings launches a suspend write), so vm.tabSettings.value only
+        // reflects it once that round trip's Flow re-emission lands -- waitForIdle()
+        // only waits for Compose's own idle state, not that. Poll instead.
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            !vm.tabSettings.value.first { it.tab == Tab.FAVORITES }.enabled
+        }
 
         composeRule.onAllNodes(isToggleable())[favoritesIndex].assertIsOff()
         assertFalse(vm.tabSettings.value.first { it.tab == Tab.FAVORITES }.enabled)

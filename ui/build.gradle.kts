@@ -12,6 +12,10 @@ android {
 
     defaultConfig {
         minSdk = 26
+        // Without this, AGP falls back to the legacy android.test.InstrumentationTestRunner,
+        // which doesn't know how to bootstrap JUnit4/Compose tests -- the process hangs
+        // during instrumentation startup and gets killed by an ANR instead of running anything.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
