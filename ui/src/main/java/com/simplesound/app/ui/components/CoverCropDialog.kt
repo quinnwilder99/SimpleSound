@@ -11,11 +11,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,16 +33,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -49,23 +51,24 @@ import com.simplesound.app.util.CoverImageStore
 import com.simplesound.app.util.CropRegion
 import kotlinx.coroutines.launch
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 private const val MAX_ZOOM = 6f
 
 /**
- * The user's framing of the photo inside the square viewport: [scale] on top of
- * the base center-crop fit, and [offset] (the image's translation from centred,
- * in on-screen pixels).
+ * The user's framing of the photo: [scale] on top of the base fit that makes the
+ * photo cover the square crop frame, and [offset] — the photo's translation from
+ * centred, in screen pixels.
  */
 private data class CropTransform(val scale: Float = 1f, val offset: Offset = Offset.Zero)
 
 /**
  * Full-screen editor shown after the user picks a photo for a playlist cover.
- * The photo can be pinch-zoomed and dragged behind a fixed square viewport;
- * confirming bakes the framed region into a saved cover file and reports its
- * file URI through [onConfirm]. [onDismiss] is called if the user backs out or
- * the image can't be read.
+ * The photo can be pinch-zoomed and dragged behind a fixed square crop frame;
+ * the area outside the frame is dimmed. Confirming bakes the framed region into
+ * a saved cover file and reports its file URI through [onConfirm]. [onDismiss]
+ * is called if the user backs out or the image can't be read.
  */
 @Composable
 fun CoverCropDialog(
@@ -81,11 +84,7 @@ fun CoverCropDialog(
     var bitmap by remember(sourceUri) { mutableStateOf<Bitmap?>(null) }
     var loadFailed by remember(sourceUri) { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
-
-    // Latest framing reported by the viewport, plus the square viewport's side
-    // in px (captured from layout) — together they define the crop on confirm.
-    var transform by remember(sourceUri) { mutableStateOf(CropTransform()) }
-    var viewportPx by remember { mutableStateOf(0) }
+    var region by remember(sourceUri) { mutableStateOf<CropRegion?>(null) }
 
     LaunchedEffect(sourceUri) {
         val loaded = CoverImageStore.loadForEditing(context, sourceUri)
@@ -96,197 +95,203 @@ fun CoverCropDialog(
         onDismissRequest = { if (!saving) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.97f))
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            CropHeader()
-
-            CropViewport(
-                bitmap = bitmap,
-                loadFailed = loadFailed,
-                onTransformChange = { transform = it },
-                onViewportSize = { viewportPx = it },
-            )
-
-            CropActions(
-                canConfirm = bitmap != null && !loadFailed && !saving && viewportPx > 0,
+        Column(Modifier.fillMaxSize().background(Color.Black)) {
+            CropTopBar(
+                canConfirm = bitmap != null && !loadFailed && !saving && region != null,
                 saving = saving,
                 onCancel = onDismiss,
                 onConfirm = {
-                    val bmp = bitmap ?: return@CropActions
-                    val region = cropRegion(bmp, viewportPx.toFloat(), transform.scale, transform.offset)
+                    val bmp = bitmap ?: return@CropTopBar
+                    val r = region ?: return@CropTopBar
                     saving = true
                     scope.launch {
                         val uri =
                             runCatching {
-                                CoverImageStore.saveCrop(context, playlistId, bmp, region, previousCoverUri)
+                                CoverImageStore.saveCrop(context, playlistId, bmp, r, previousCoverUri)
                             }.getOrNull()
                         saving = false
                         if (uri != null) onConfirm(uri.toString()) else onDismiss()
                     }
                 },
             )
-        }
-    }
-}
 
-@Composable
-private fun CropHeader() {
-    Text(
-        "Position cover",
-        style = MaterialTheme.typography.titleMedium,
-        color = Color.White,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(bottom = 4.dp),
-    )
-    Text(
-        "Pinch to zoom, drag to choose what sits in the centre.",
-        style = MaterialTheme.typography.bodySmall,
-        color = Color.White.copy(alpha = 0.7f),
-        modifier = Modifier.padding(bottom = 16.dp),
-    )
-}
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                val loaded = bitmap
+                when {
+                    loadFailed ->
+                        Text("Couldn't open that image.", color = Color.White)
 
-@Composable
-private fun CropViewport(
-    bitmap: Bitmap?,
-    loadFailed: Boolean,
-    onTransformChange: (CropTransform) -> Unit,
-    onViewportSize: (Int) -> Unit,
-) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .background(Color(0xFF101010))
-            .clipToBounds()
-            .onSizeChanged { onViewportSize(it.width) },
-        contentAlignment = Alignment.Center,
-    ) {
-        when {
-            loadFailed ->
-                Text("Couldn't open that image.", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    loaded == null ->
+                        CircularProgressIndicator(color = Color.White)
 
-            bitmap == null ->
-                CircularProgressIndicator(color = Color.White)
-
-            else -> {
-                CropImage(bitmap = bitmap, onTransformChange = onTransformChange)
-                // A thin frame so the edge of what will be kept is obvious.
-                Canvas(Modifier.fillMaxSize()) {
-                    drawRect(
-                        color = Color.White.copy(alpha = 0.85f),
-                        topLeft = Offset.Zero,
-                        size = size,
-                        style = Stroke(width = 2.dp.toPx()),
-                    )
+                    else ->
+                        CropStage(bitmap = loaded, onRegionChange = { region = it })
                 }
             }
+
+            Text(
+                "Pinch to zoom · drag to reposition",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
 
-/**
- * Draws [bitmap] at its full [baseScale] size (so the smaller edge exactly
- * covers the square viewport and the other edge overflows), centred, with the
- * user's zoom/pan applied on top via [graphicsLayer]. The parent clips to the
- * square, so panning reveals the overflow rather than a pre-cropped square.
- */
 @Composable
-private fun CropImage(
-    bitmap: Bitmap,
-    onTransformChange: (CropTransform) -> Unit,
-) {
-    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
-    var transform by remember(bitmap) { mutableStateOf(CropTransform()) }
-    // detectTransformGestures runs in a long-lived coroutine keyed only by
-    // `bitmap`, so it must read the latest framing through this rather than
-    // close over a stale value.
-    val live by rememberUpdatedState(transform)
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        val frame = constraints.maxWidth.toFloat()
-        val baseScale = max(frame / bitmap.width, frame / bitmap.height)
-        val displayW = with(LocalDensity.current) { (bitmap.width * baseScale).toDp() }
-        val displayH = with(LocalDensity.current) { (bitmap.height * baseScale).toDp() }
-        Image(
-            bitmap = imageBitmap,
-            contentDescription = null,
-            contentScale = ContentScale.FillBounds,
-            modifier =
-                Modifier
-                    .size(displayW, displayH)
-                    .graphicsLayer {
-                        scaleX = transform.scale
-                        scaleY = transform.scale
-                        translationX = transform.offset.x
-                        translationY = transform.offset.y
-                    }
-                    .pointerInput(bitmap) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            val next = (live.scale * zoom).coerceIn(1f, MAX_ZOOM)
-                            val maxX = max(0f, (bitmap.width * baseScale * next - frame) / 2f)
-                            val maxY = max(0f, (bitmap.height * baseScale * next - frame) / 2f)
-                            val moved = live.offset + pan
-                            transform =
-                                CropTransform(
-                                    next,
-                                    Offset(moved.x.coerceIn(-maxX, maxX), moved.y.coerceIn(-maxY, maxY)),
-                                )
-                            onTransformChange(transform)
-                        }
-                    },
-        )
-    }
-}
-
-@Composable
-private fun CropActions(
+private fun CropTopBar(
     canConfirm: Boolean,
     saving: Boolean,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp),
-        horizontalArrangement = Arrangement.End,
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         TextButton(onClick = onCancel, enabled = !saving) {
             Text("Cancel", color = Color.White)
         }
-        TextButton(enabled = canConfirm, onClick = onConfirm) {
-            Text(
-                if (saving) "Saving…" else "Use photo",
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-            )
+        Text("Position cover", color = Color.White, fontWeight = FontWeight.SemiBold)
+        Button(
+            onClick = onConfirm,
+            enabled = canConfirm,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+        ) {
+            Text(if (saving) "Saving…" else "Use photo")
         }
     }
 }
 
 /**
- * Maps the square viewport (side [frame] px) back to pixel coordinates in [bmp],
- * given the user's [scale] and [offset]. The image is rendered centred in the
- * viewport with a base center-crop fit, then scaled by [scale] and translated by
- * [offset] about its centre — this inverts that transform for the viewport's
- * bounding box. [CoverImageStore.saveCrop] re-clamps the result into bounds.
+ * The interactive crop area: the photo drawn under a centred square frame, with
+ * everything outside the frame dimmed. Reports the pixel region of [bitmap] that
+ * the frame currently covers through [onRegionChange] whenever it changes.
  */
-private fun cropRegion(
-    bmp: Bitmap,
-    frame: Float,
-    scale: Float,
-    offset: Offset,
-): CropRegion {
-    val baseScale = max(frame / bmp.width, frame / bmp.height)
-    val total = baseScale * scale
-    val left = bmp.width / 2f - (frame / 2f + offset.x) / total
-    val top = bmp.height / 2f - (frame / 2f + offset.y) / total
-    val size = frame / total
-    return CropRegion(left.roundToInt(), top.roundToInt(), size.roundToInt())
+@Composable
+private fun CropStage(
+    bitmap: Bitmap,
+    onRegionChange: (CropRegion) -> Unit,
+) {
+    val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
+    var transform by remember(bitmap) { mutableStateOf(CropTransform()) }
+    // detectTransformGestures runs in a coroutine keyed only by `fit`, so it
+    // reads the latest transform through this rather than a stale capture.
+    val live by rememberUpdatedState(transform)
+
+    BoxWithConstraints(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
+        val density = LocalDensity.current
+        val stageW = constraints.maxWidth.toFloat()
+        val stageH = constraints.maxHeight.toFloat()
+        val frame = min(stageW, stageH)
+        val fit = remember(bitmap, stageW, stageH) { CropFit(bitmap, frame, stageW, stageH) }
+        val displayW = with(density) { fit.displayW.toDp() }
+        val displayH = with(density) { fit.displayH.toDp() }
+
+        val current = remember(fit, transform) { fit.region(transform) }
+        LaunchedEffect(current) { onRegionChange(current) }
+
+        // Gestures are handled on this full-stage box (never scaled/translated),
+        // so `centroid` is in stage coordinates and `pan` is in screen pixels.
+        Box(
+            Modifier.fillMaxSize().pointerInput(fit) {
+                detectTransformGestures { centroid, pan, zoom, _ ->
+                    transform = fit.next(live, centroid, pan, zoom)
+                }
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                bitmap = imageBitmap,
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier =
+                    Modifier
+                        .size(displayW, displayH)
+                        .graphicsLayer {
+                            scaleX = transform.scale
+                            scaleY = transform.scale
+                            translationX = transform.offset.x
+                            translationY = transform.offset.y
+                        },
+            )
+        }
+        CropMask(framePx = frame)
+    }
+}
+
+/** Dims everything outside the centred [framePx]-sided square and outlines it. */
+@Composable
+private fun CropMask(framePx: Float) {
+    Canvas(Modifier.fillMaxSize()) {
+        val scrim = Color.Black.copy(alpha = 0.55f)
+        val left = (size.width - framePx) / 2f
+        val top = (size.height - framePx) / 2f
+        val right = left + framePx
+        val bottom = top + framePx
+        drawRect(scrim, Offset.Zero, Size(size.width, top))
+        drawRect(scrim, Offset(0f, bottom), Size(size.width, size.height - bottom))
+        drawRect(scrim, Offset(0f, top), Size(left, framePx))
+        drawRect(scrim, Offset(right, top), Size(size.width - right, framePx))
+        drawRect(
+            Color.White.copy(alpha = 0.9f),
+            Offset(left, top),
+            Size(framePx, framePx),
+            style = Stroke(width = 1.dp.toPx()),
+        )
+    }
+}
+
+/**
+ * The geometry of fitting [bmp] to a centred square crop frame of side [frame]
+ * px inside a [stageW] x [stageH] stage: the photo is scaled by `baseScale` so
+ * its shorter edge exactly covers the frame, drawn centred in the stage, then
+ * the user's zoom/pan is applied on top.
+ */
+private class CropFit(
+    private val bmp: Bitmap,
+    private val frame: Float,
+    stageW: Float,
+    stageH: Float,
+) {
+    private val baseScale = max(frame / bmp.width, frame / bmp.height)
+    private val stageCenter = Offset(stageW / 2f, stageH / 2f)
+
+    val displayW get() = bmp.width * baseScale
+    val displayH get() = bmp.height * baseScale
+
+    /**
+     * The next transform after one gesture: [zoom] clamped to [1, MAX_ZOOM] and
+     * anchored on the pinch [centroid] (stage coords) so the point under the
+     * fingers stays put, then [pan], then the offset clamped so the photo still
+     * covers the crop frame.
+     */
+    fun next(
+        prev: CropTransform,
+        centroid: Offset,
+        pan: Offset,
+        zoom: Float,
+    ): CropTransform {
+        val scale = (prev.scale * zoom).coerceIn(1f, MAX_ZOOM)
+        val k = scale / prev.scale
+        val d = centroid - stageCenter
+        val moved = d * (1f - k) + pan + prev.offset * k
+        val maxX = max(0f, (displayW * scale - frame) / 2f)
+        val maxY = max(0f, (displayH * scale - frame) / 2f)
+        return CropTransform(
+            scale,
+            Offset(moved.x.coerceIn(-maxX, maxX), moved.y.coerceIn(-maxY, maxY)),
+        )
+    }
+
+    /** The pixel region of [bmp] the crop frame covers under [t]. */
+    fun region(t: CropTransform): CropRegion {
+        val total = baseScale * t.scale
+        val left = bmp.width / 2f - (frame / 2f + t.offset.x) / total
+        val top = bmp.height / 2f - (frame / 2f + t.offset.y) / total
+        return CropRegion(left.roundToInt(), top.roundToInt(), (frame / total).roundToInt())
+    }
 }
