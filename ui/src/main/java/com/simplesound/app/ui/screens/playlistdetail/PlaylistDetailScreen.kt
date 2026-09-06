@@ -1,6 +1,6 @@
 package com.simplesound.app.ui.screens.playlistdetail
 
-import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -54,6 +54,7 @@ import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
 import com.simplesound.app.ui.components.Artwork
+import com.simplesound.app.ui.components.CoverCropDialog
 import com.simplesound.app.ui.components.PlaylistSelectionActionBar
 import com.simplesound.app.ui.components.PlaylistTrackActionsSheet
 import com.simplesound.app.ui.components.RemoveTracksDialog
@@ -61,6 +62,7 @@ import com.simplesound.app.ui.components.SortHeader
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
 import com.simplesound.app.ui.components.liquidGlass
+import com.simplesound.app.util.CoverImageStore
 import com.simplesound.app.util.trackCountLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -162,16 +164,17 @@ fun PlaylistDetailScreen(
         onDispose { vm.setMiniPlayerHidden(false) }
     }
 
+    // The photo the user just picked, waiting to be framed in the crop editor.
+    // The picker's read grant lasts until the process dies, which is long enough
+    // for the editor to decode it once; the framed region is then baked into a
+    // file we own, so nothing here needs a persistable URI permission.
+    var pendingCover by remember { mutableStateOf<Uri?>(null) }
+
     val coverPicker =
         rememberLauncherForActivityResult(
             ActivityResultContracts.PickVisualMedia(),
         ) { uri ->
-            if (uri != null) {
-                runCatching {
-                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                vm.setPlaylistCover(playlistId, uri.toString())
-            }
+            if (uri != null) pendingCover = uri
         }
 
     Scaffold(
@@ -344,6 +347,7 @@ fun PlaylistDetailScreen(
         DeletePlaylistDialog(
             name = playlist.name,
             onConfirm = {
+                CoverImageStore.deleteIfOwned(context, playlist.coverUri)
                 vm.deletePlaylist(playlistId)
                 deleting = false
                 onBack()
@@ -418,6 +422,21 @@ fun PlaylistDetailScreen(
     // Track details dialog.
     detailsTrack?.let { t ->
         TrackDetailsDialog(track = t, onDismiss = { detailsTrack = null })
+    }
+
+    // Frame a just-picked photo before it becomes the cover: zoom/pan to choose
+    // which part sits in the centre of the (square) cover.
+    pendingCover?.let { uri ->
+        CoverCropDialog(
+            sourceUri = uri,
+            playlistId = playlistId,
+            previousCoverUri = playlist.coverUri,
+            onConfirm = { coverUri ->
+                vm.setPlaylistCover(playlistId, coverUri)
+                pendingCover = null
+            },
+            onDismiss = { pendingCover = null },
+        )
     }
 }
 

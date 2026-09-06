@@ -5,8 +5,9 @@
   An empty <full-backup-content> keeps the platform default: EVERYTHING in the
   app's private storage is backed up — the Room database (simplesound.db, holding
   playlists / favorites / play stats), the "simplesound_playlists" SharedPreferences
-  (last-played + queue resume point) and the "simplesound_settings" DataStore
-  (accent colour, tabs, sort, crossfade). So a full reinstall that restores from
+  (last-played + queue resume point), the "simplesound_settings" DataStore
+  (accent colour, tabs, sort, crossfade) and files/playlist_covers/ (the baked
+  JPEGs of user-picked playlist covers). So a full reinstall that restores from
   cloud backup comes back with the library intact, just like an in-place
   `adb install -r` update does. Nothing here is sensitive enough to exclude.
 -->
