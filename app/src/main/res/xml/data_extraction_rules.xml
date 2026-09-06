@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 (API 31)+ replacement for backup_rules.xml. Empty <cloud-backup> and
+  <device-transfer> sections keep the platform default (back up / transfer all
+  private app data), so both a cloud restore and a phone-to-phone transfer bring
+  the full SimpleSound library — playlists, favorites, play history, settings —
+  across. See backup_rules.xml for the list of files this covers.
+-->
+<data-extraction-rules>
+    <cloud-backup />
+    <device-transfer />
+</data-extraction-rules>

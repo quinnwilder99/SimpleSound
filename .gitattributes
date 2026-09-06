@@ -1,0 +1,8 @@
+# The committed debug keystore is binary. Never let autocrlf touch it — a single
+# byte flipped makes it unusable and every future update fails to install.
+keystore/simplesound-debug.keystore binary
+
+# Room's exported schema JSON is generated with LF by KSP. Pin it to LF so a
+# local build on a machine with core.autocrlf=true doesn't leave it showing as
+# modified — which would false-positive the deploy.ps1 / CI schema guard.
+data/schemas/**/*.json text eol=lf

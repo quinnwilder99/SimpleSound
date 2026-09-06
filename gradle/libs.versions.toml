@@ -25,6 +25,8 @@ turbine = "1.2.0"
 robolectric = "4.13"
 composeUiTest = "1.7.4"
 espresso = "3.7.0"
+androidxTestRunner = "1.6.2"
+androidxTestExtJunit = "1.2.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -74,6 +76,8 @@ robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4", version.ref = "composeUiTest" }
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest", version.ref = "composeUiTest" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

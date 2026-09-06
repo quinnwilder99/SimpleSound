@@ -11,4 +11,17 @@
 local.properties
 *.jks
 *.keystore
+# ...except the deliberately-committed, non-secret debug signing key. Every
+# machine must sign SimpleSound debug builds with the SAME key or `adb install -r`
+# stops working as an update (signature mismatch -> forced uninstall -> data
+# loss). Debug keystores are not secrets: the password is the well-known
+# "android". See DEPLOY.md.
+!keystore/simplesound-debug.keystore
+
+# Release signing secrets, if you ever add a release variant, do NOT commit.
+keystore.properties
 sync.ffs_db
+
+# Kotlin compiler daemon scratch (session locks, error logs). Transient — some
+# were committed by accident earlier; run `git rm -r --cached .kotlin` once.
+.kotlin/

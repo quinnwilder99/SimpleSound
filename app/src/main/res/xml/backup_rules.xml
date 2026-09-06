@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto Backup for Apps, used on Android 11 (API 30) and below.
+
+  An empty <full-backup-content> keeps the platform default: EVERYTHING in the
+  app's private storage is backed up — the Room database (simplesound.db, holding
+  playlists / favorites / play stats), the "simplesound_playlists" SharedPreferences
+  (last-played + queue resume point) and the "simplesound_settings" DataStore
+  (accent colour, tabs, sort, crossfade). So a full reinstall that restores from
+  cloud backup comes back with the library intact, just like an in-place
+  `adb install -r` update does. Nothing here is sensitive enough to exclude.
+-->
+<full-backup-content />

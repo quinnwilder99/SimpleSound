@@ -31,6 +31,16 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: AppViewModel by viewModels()
 
+    /**
+     * Flips to true once this Activity has actually seen the player hold a
+     * non-empty queue. Until then, an empty [PlayerController.queue] means "a
+     * persisted queue is still waiting to be restored" (cold start, waiting on
+     * the MediaStore scan) rather than "the user emptied the queue" — so the
+     * lifecycle persistence below must NOT write the cleared state, or it would
+     * wipe the saved queue before [tryRestoreQueue] gets a chance to use it.
+     */
+    private var queueObservedNonEmpty = false
+
     private val requestPermissions =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             // Regardless of the grant result, attempt to load the library. If audio
@@ -115,11 +125,16 @@ class MainActivity : ComponentActivity() {
             combine(player.queue, player.queueIndex, player.queueTitle) { tracks, index, title ->
                 Triple(tracks, index, title)
             }.collect { (tracks, index, title) ->
-                if (tracks.isEmpty()) {
-                    musicRepository.saveQueue(null, emptyList(), -1)
-                } else {
+                if (tracks.isNotEmpty()) {
+                    queueObservedNonEmpty = true
                     musicRepository.saveQueue(title, tracks.map { it.id }, index)
+                } else if (queueObservedNonEmpty) {
+                    // The queue went from populated to empty during this session
+                    // (the user removed the last item) — that's a real clear.
+                    musicRepository.saveQueue(null, emptyList(), -1)
                 }
+                // Otherwise the queue is empty only because a saved queue hasn't
+                // finished restoring yet — leave the persisted snapshot alone.
             }
         }
         // Once the device library finishes loading, the persisted snapshot (which has
@@ -168,20 +183,28 @@ class MainActivity : ComponentActivity() {
         // Without this, the saved position would only be updated on track
         // transitions, which is why the mini player reset to 00:00 after
         // closing+reopening the app mid-track.
+        //
+        // player.lastPlayedTrack is only ever null before anything has played
+        // AND nothing was restored (i.e. there is no saved snapshot to protect),
+        // so passing it straight through is safe — a null here clears keys that
+        // are already absent.
         val track = player.lastPlayedTrack.value
         val pos = player.positionMs.value
         musicRepository.saveLastPlayedTrack(track, pos)
-        // Persist the queue snapshot too so the queue sheet survives restart. If
-        // the queue is empty, clear the saved queue so we don't restore stale data.
+        // Persist the queue snapshot too so the queue sheet survives restart.
+        // Only clear the saved queue if we've actually seen a non-empty queue
+        // this session (a real user-initiated clear). An empty queue before then
+        // just means restore is still pending — see queueObservedNonEmpty.
         val tracks = player.queue.value
-        if (tracks.isEmpty()) {
-            musicRepository.saveQueue(null, emptyList(), -1)
-        } else {
+        if (tracks.isNotEmpty()) {
+            queueObservedNonEmpty = true
             musicRepository.saveQueue(
                 player.queueTitle.value,
                 tracks.map { it.id },
                 player.queueIndex.value,
             )
+        } else if (queueObservedNonEmpty) {
+            musicRepository.saveQueue(null, emptyList(), -1)
         }
         player.release()
     }

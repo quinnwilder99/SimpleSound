@@ -1,5 +1,11 @@
 package com.simplesound.app.ui.screens.nowplaying
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,7 +57,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -286,19 +295,12 @@ fun NowPlayingScreen(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = { player.toggleShuffle() }) {
-                        Icon(
-                            Icons.Rounded.Shuffle,
-                            contentDescription = "Shuffle",
-                            tint =
-                                if (isShuffleOn) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onBackground
-                                },
-                            modifier = Modifier.size(28.dp),
-                        )
-                    }
+                    ToggleControlButton(
+                        active = isShuffleOn,
+                        onClick = { player.toggleShuffle() },
+                        icon = Icons.Rounded.Shuffle,
+                        contentDescription = "Shuffle",
+                    )
                     IconButton(onClick = { player.previous() }) {
                         Icon(
                             Icons.Rounded.SkipPrevious,
@@ -331,19 +333,12 @@ fun NowPlayingScreen(
                             modifier = Modifier.size(40.dp),
                         )
                     }
-                    IconButton(onClick = { player.cycleRepeatMode() }) {
-                        Icon(
-                            if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                            contentDescription = "Repeat",
-                            tint =
-                                if (repeatMode > 0) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onBackground
-                                },
-                            modifier = Modifier.size(28.dp),
-                        )
-                    }
+                    ToggleControlButton(
+                        active = repeatMode > 0,
+                        onClick = { player.cycleRepeatMode() },
+                        icon = if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                        contentDescription = "Repeat",
+                    )
                 }
                 Spacer(Modifier.height(24.dp))
             }
@@ -415,6 +410,63 @@ fun NowPlayingScreen(
             onRemove = { index -> player.removeQueueItem(index) },
             onDismiss = { showQueueSheet = false },
         )
+    }
+}
+
+/**
+ * A playback toggle (shuffle / repeat) whose "on" state is shown with more than
+ * just an accent tint. When the accent color is close to the background
+ * (grey / black / white themes) a tinted icon alone is easy to miss, so an
+ * active button also gets a soft persistent disc plus a gently pulsing halo
+ * behind it — both drawn in [onBackground] so they read regardless of accent.
+ */
+@Composable
+private fun ToggleControlButton(
+    active: Boolean,
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+) {
+    val glowAlpha by rememberInfiniteTransition(label = "toggleGlow").animateFloat(
+        initialValue = 0.16f,
+        targetValue = 0.4f,
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        label = "toggleGlowAlpha",
+    )
+    val accent = MaterialTheme.colorScheme.primary
+    val haloColor = MaterialTheme.colorScheme.onBackground
+    IconButton(onClick = onClick) {
+        Box(contentAlignment = Alignment.Center) {
+            if (active) {
+                Box(
+                    modifier =
+                        Modifier.size(40.dp).drawBehind {
+                            val radius = size.minDimension / 2f
+                            // Persistent soft disc: the color-independent "selected" cue.
+                            drawCircle(color = haloColor.copy(alpha = 0.14f), radius = radius * 0.78f)
+                            // Gently pulsing halo: the glow.
+                            drawCircle(
+                                brush =
+                                    Brush.radialGradient(
+                                        colors = listOf(haloColor.copy(alpha = glowAlpha), Color.Transparent),
+                                        radius = radius,
+                                    ),
+                                radius = radius,
+                            )
+                        },
+                )
+            }
+            Icon(
+                icon,
+                contentDescription = contentDescription,
+                tint = if (active) accent else haloColor,
+                modifier = Modifier.size(28.dp),
+            )
+        }
     }
 }
 

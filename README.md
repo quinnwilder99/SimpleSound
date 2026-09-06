@@ -8,7 +8,7 @@ Made this because I am tired of bad and confusing MP3 players on the market. Jee
 
 SimpleSound is a dark-only Android music player focused on a calm, flagship listening experience inspired by Samsung's native music player. The goal is simplicity: no unnecessary features, no clutter, one accent color, roomy typography, and a tab system controlled by the user.
 
-> Status: **v1.1.0** — Core navigation, library management, playlists, favorites, search, sleep timer, crossfade, and Media3 playback are all implemented. The app uses a multi-module architecture with offline-first data management, dependency injection, and separated playback/UI layers.
+> Status: **v1.2.0** — Core navigation, library management, playlists, favorites, search, sleep timer, crossfade, and Media3 playback are all implemented. The app uses a multi-module architecture with offline-first data management, dependency injection, and separated playback/UI layers.
 
 ---
 
@@ -322,17 +322,28 @@ Build debug APK:
 ./gradlew :app:assembleDebug
 ```
 
+Deploy to a connected phone as an in-place update (keeps playlists + play
+history) — see [DEPLOY.md](DEPLOY.md):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy.ps1
+```
+
 Run unit tests (Repository + ViewModel, JVM/Robolectric):
 
 ```bash
 ./gradlew test
 ```
 
-Run Compose UI tests (needs a connected device/emulator):
+Run Compose UI tests + Room migration tests (needs a connected device/emulator):
 
 ```bash
-./gradlew :ui:connectedAndroidTest
+./gradlew :ui:connectedAndroidTest :data:connectedAndroidTest
 ```
+
+`:data:connectedAndroidTest` runs `AppDatabaseMigrationTest`, which replays every
+Room schema migration and must pass before shipping any DB schema change (see
+[DEPLOY.md](DEPLOY.md)).
 
 Run static analysis:
 

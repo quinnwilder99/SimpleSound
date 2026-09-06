@@ -6,6 +6,22 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// ---- versionCode: derived from the git commit count so it ALWAYS increases ----
+// Every deploy must have a strictly higher versionCode than the build already on
+// the phone, otherwise `adb install -r` fails with INSTALL_FAILED_VERSION_DOWNGRADE
+// and the only way past that is `-d` (downgrade) or an uninstall — both wipe the
+// playlists/history. Tying it to `git rev-list --count HEAD` means committing is
+// the only thing needed to bump it, and it can never accidentally go backwards.
+// VERSION_CODE_FLOOR is a manual ratchet: bump it if git history is ever squashed
+// or a shallow clone reports a lower count than a build already in the wild.
+val versionCodeFloor = 53
+val gitCommitCount: Int =
+    runCatching {
+        providers.exec {
+            commandLine("git", "rev-list", "--count", "HEAD")
+        }.standardOutput.asText.get().trim().toInt()
+    }.getOrDefault(0)
+
 android {
     namespace = "com.simplesound.app"
     compileSdk = 34
@@ -14,12 +30,30 @@ android {
         applicationId = "com.simplesound.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = maxOf(gitCommitCount, versionCodeFloor)
+        versionName = "1.2.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        // The debug build is what gets sideloaded onto the phone (see DEPLOY.md),
+        // so it must be signed with a STABLE key checked into the repo rather than
+        // each machine's throwaway ~/.android/debug.keystore. If the signing key
+        // changes, Android rejects the install as a different app and the user has
+        // to uninstall first — losing every playlist and all play history. This is
+        // the standard AOSP debug key (password "android"); it is not a secret.
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/simplesound-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

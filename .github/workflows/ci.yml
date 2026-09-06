@@ -45,6 +45,17 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --console=plain
 
+      # Catches an @Entity change that didn't regenerate/commit the exported Room
+      # schema JSON. A stale schema means migrations can't be reviewed or tested,
+      # which is how an app update ends up crashing on launch or losing data.
+      - name: Verify Room schema is up to date
+        run: |
+          ./gradlew :data:kspDebugKotlin --console=plain
+          if ! git diff --exit-code -- data/schemas; then
+            echo "::error::data/schemas/ is out of date. Run ./gradlew :data:kspDebugKotlin and commit the result, and add a Migration (see DEPLOY.md)."
+            exit 1
+          fi
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

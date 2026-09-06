@@ -23,7 +23,16 @@ object DatabaseModule {
     @Singleton
     fun provideAppDatabase(
         @ApplicationContext context: Context,
-    ): AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, "simplesound.db").build()
+    ): AppDatabase {
+        val builder = Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
+        // Applied one by one rather than with a spread so a growing migration list
+        // stays cheap. NO fallbackToDestructiveMigration() anywhere: if a schema
+        // change ever ships without a matching Migration we want the loud crash on
+        // launch (caught by AppDatabaseMigrationTest / QA), NOT a silent wipe of
+        // the user's playlists and play history. See AppDatabase's KDoc.
+        AppDatabase.MIGRATIONS.forEach { builder.addMigrations(it) }
+        return builder.build()
+    }
 
     @Provides
     fun provideTrackDao(db: AppDatabase): TrackDao = db.trackDao()

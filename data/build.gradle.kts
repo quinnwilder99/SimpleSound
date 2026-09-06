@@ -11,6 +11,7 @@ android {
 
     defaultConfig {
         minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -25,6 +26,22 @@ android {
             isIncludeAndroidResources = true
         }
     }
+    sourceSets {
+        // Room's exported schema JSON (see the `room.schemaLocation` KSP arg below)
+        // is checked into `data/schemas/`. Bundling it as an androidTest asset lets
+        // AppDatabaseMigrationTest open every historical schema with MigrationTestHelper
+        // and prove each migration produces exactly the schema Room expects.
+        getByName("androidTest") {
+            assets.srcDirs(files("$projectDir/schemas"))
+        }
+    }
+}
+
+ksp {
+    // Export the compiled Room schema to a checked-in JSON per version. This is
+    // what makes migrations reviewable (the diff shows the exact DDL change) and
+    // testable. NEVER hand-edit these files.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -58,4 +75,11 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.room.testing)
+
+    // Instrumented Room migration tests (AppDatabaseMigrationTest) — these need a
+    // real device/emulator, run with `./gradlew :data:connectedAndroidTest`.
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
