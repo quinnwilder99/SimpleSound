@@ -139,7 +139,6 @@ fun PlaylistDetailScreen(
     // persisted order. (The custom order lives in the Room-backed store, not a
     // flow observed here, so we need an explicit recomposition trigger.)
     var customOrderVersion by remember { mutableStateOf(0) }
-    val customOrderMode = sort == com.simplesound.app.data.model.SortOption.CUSTOM_ORDER
     val sortedTracks =
         remember(playlistTracks, sort, customOrderVersion) {
             vm.sortPlaylistTracks(playlistId, playlistTracks, sort)
@@ -151,7 +150,7 @@ fun PlaylistDetailScreen(
     var tracks by remember(sortedTracks) { mutableStateOf(sortedTracks) }
     val editable = playlist.kind == PlaylistKind.USER
 
-    // ---- Drag-to-reorder (custom order only) ----
+    // ---- Drag-to-reorder (available while selection mode is active) ----
     val listState = rememberLazyListState()
     val haptics = LocalHapticFeedback.current
     val reorderState =
@@ -308,26 +307,32 @@ fun PlaylistDetailScreen(
                 items(tracks, key = { it.id }) { track ->
                     val selected = track.id in selectedIds
                     val index = tracks.indexOf(track)
-                    ReorderableItem(reorderState, key = track.id, enabled = customOrderMode) { isDragging ->
-                        // Lift the row and give it a small, fast wiggle while it's
-                        // being dragged — the "picked up" cue that replaces the
-                        // old up/down arrows.
+                    ReorderableItem(reorderState, key = track.id, enabled = selectionMode) { isDragging ->
+                        // The row being dragged lifts with a shadow.
                         val lift by animateDpAsState(
-                            targetValue = if (isDragging) 8.dp else 0.dp,
+                            targetValue = if (isDragging) 10.dp else 0.dp,
                             label = "reorder-lift",
                         )
+                        // Every selected row jiggles for as long as selection mode
+                        // is active — the cue that these tracks are "picked up" and
+                        // can be dragged. Slightly different periods per row keep
+                        // the wiggles from marching in lockstep.
                         val wiggle =
-                            if (isDragging) {
-                                val transition = rememberInfiniteTransition(label = "reorder-wiggle")
+                            if (selected) {
+                                val transition = rememberInfiniteTransition(label = "select-wiggle")
                                 val angle by transition.animateFloat(
-                                    initialValue = -1.4f,
-                                    targetValue = 1.4f,
+                                    initialValue = -1.1f,
+                                    targetValue = 1.1f,
                                     animationSpec =
                                         infiniteRepeatable(
-                                            animation = tween(durationMillis = 110, easing = LinearEasing),
+                                            animation =
+                                                tween(
+                                                    durationMillis = if (track.id % 2 == 0L) 122 else 104,
+                                                    easing = LinearEasing,
+                                                ),
                                             repeatMode = RepeatMode.Reverse,
                                         ),
-                                    label = "reorder-wiggle-angle",
+                                    label = "select-wiggle-angle",
                                 )
                                 angle
                             } else {
@@ -340,28 +345,24 @@ fun PlaylistDetailScreen(
                                     .shadow(lift, RoundedCornerShape(20.dp))
                                     .graphicsLayer { rotationZ = wiggle },
                             handleModifier =
-                                if (customOrderMode) {
-                                    Modifier.longPressDraggableHandle(
-                                        onDragStarted = {
-                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        },
-                                        onDragStopped = {
-                                            vm.setPlaylistCustomOrder(playlistId, tracks.map { it.id })
-                                            customOrderVersion++
-                                        },
-                                    )
-                                } else {
-                                    Modifier
-                                },
+                                Modifier.draggableHandle(
+                                    onDragStarted = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    },
+                                    onDragStopped = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        vm.setPlaylistCustomOrder(playlistId, tracks.map { it.id })
+                                        // A manual reorder only sticks under CUSTOM_ORDER, so
+                                        // switch to it if some other sort was active.
+                                        if (sort != SortOption.CUSTOM_ORDER) {
+                                            vm.setPlaylistSort(playlistId, SortOption.CUSTOM_ORDER)
+                                        }
+                                        customOrderVersion++
+                                    },
+                                ),
                             selectionMode = selectionMode,
                             selected = selected,
-                            dragging = isDragging,
-                            onLongClick =
-                                if (customOrderMode) {
-                                    null
-                                } else {
-                                    { toggleSelected(track.id) }
-                                },
+                            onLongClick = { toggleSelected(track.id) },
                             onClick = {
                                 if (selectionMode) {
                                     toggleSelected(track.id)

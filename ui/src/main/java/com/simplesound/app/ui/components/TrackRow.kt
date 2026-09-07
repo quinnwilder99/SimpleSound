@@ -28,14 +28,13 @@ import com.simplesound.app.data.model.Track
 /**
  * A single track list row: artwork, title + artist, overflow menu.
  *
- * When [selectionMode] is true the row shows a selection indicator instead of the
- * overflow button and toggles selection on tap (rather than playing). A long-press
- * enters selection mode via [onLongClick]; pass `null` to disable the long-press
- * (e.g. when the caller is using it to start a drag instead).
+ * When [selectionMode] is true the row shows a selection checkbox on the left and a
+ * drag-handle grip on the right (in place of the overflow button), and tapping the
+ * row toggles selection rather than playing. A long-press enters selection mode via
+ * [onLongClick].
  *
- * [handleModifier] is applied to the whole row so the caller can turn it into a
- * long-press drag handle for reordering. While a track is actually being dragged
- * ([dragging] true) its trailing overflow menu is swapped for a grip glyph.
+ * [handleModifier] is applied to that drag-handle grip so the caller can make it a
+ * reorder handle (press the grip and drag).
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -46,8 +45,7 @@ fun TrackRow(
     modifier: Modifier = Modifier,
     selectionMode: Boolean = false,
     selected: Boolean = false,
-    onLongClick: (() -> Unit)? = {},
-    dragging: Boolean = false,
+    onLongClick: () -> Unit = {},
     handleModifier: Modifier = Modifier,
 ) {
     Row(
@@ -73,13 +71,10 @@ fun TrackRow(
                     showGloss = selected,
                     showRim = selected,
                 )
-                // onLongClick is null when the caller uses the long-press to start
-                // a drag instead, so combinedClickable must not also claim it.
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
                 )
-                .then(handleModifier)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -124,30 +119,26 @@ fun TrackRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        when {
-            // Only while a track is actually held for dragging does its trailing
-            // slot swap the overflow menu for a grip glyph.
-            dragging -> {
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Rounded.DragHandle,
-                        contentDescription = "Drag to reorder",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+        if (selectionMode) {
+            // Reorder grip: pressing it and dragging moves the row (handleModifier
+            // carries the caller's drag behaviour).
+            Box(
+                Modifier.size(48.dp).then(handleModifier),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Rounded.DragHandle,
+                    contentDescription = "Drag to reorder",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            selectionMode -> {
-                // Hide overflow button while selecting; keep spacing consistent.
-                Box(Modifier.size(48.dp))
-            }
-            else -> {
-                IconButton(onClick = onMore) {
-                    Icon(
-                        Icons.Rounded.MoreVert,
-                        contentDescription = "More options",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+        } else {
+            IconButton(onClick = onMore) {
+                Icon(
+                    Icons.Rounded.MoreVert,
+                    contentDescription = "More options",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
