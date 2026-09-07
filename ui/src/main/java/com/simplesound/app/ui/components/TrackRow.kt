@@ -1,7 +1,6 @@
 package com.simplesound.app.ui.components
 
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,9 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowDownward
-import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Icon
@@ -34,10 +32,9 @@ import com.simplesound.app.data.model.Track
  * overflow button and toggles selection on tap (rather than playing). A long-press
  * enters selection mode via [onLongClick].
  *
- * When both [selectionMode] and [customOrderMode] are true the row shows up/down
- * arrows on the right so the user can reorder the track within the playlist.
- * Reordering is only permitted while the selection bar is present — the arrows
- * never appear outside that combined mode.
+ * When [reordering] is true the row shows a drag-handle glyph on the right and
+ * [handleModifier] (supplied by the caller as a long-press drag handle) is applied
+ * to the whole row, so the user reorders by pressing and dragging the track itself.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -49,11 +46,8 @@ fun TrackRow(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onLongClick: () -> Unit = {},
-    customOrderMode: Boolean = false,
-    canMoveUp: Boolean = true,
-    canMoveDown: Boolean = true,
-    onMoveUp: () -> Unit = {},
-    onMoveDown: () -> Unit = {},
+    reordering: Boolean = false,
+    handleModifier: Modifier = Modifier,
 ) {
     Row(
         modifier =
@@ -78,7 +72,13 @@ fun TrackRow(
                     showGloss = selected,
                     showRim = selected,
                 )
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                // While reordering, the whole row is a long-press drag handle, so
+                // combinedClickable must not also claim the long-press gesture.
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = if (reordering) null else onLongClick,
+                )
+                .then(handleModifier)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -124,41 +124,19 @@ fun TrackRow(
             )
         }
         when {
-            // Custom-order reordering is only permitted while the selection bar
-            // is present; otherwise fall through to the normal overflow button.
-            selectionMode && customOrderMode -> {
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                        Icon(
-                            Icons.Rounded.ArrowUpward,
-                            contentDescription = "Move up",
-                            tint =
-                                if (canMoveUp) {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                                },
-                        )
-                    }
-                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                        Icon(
-                            Icons.Rounded.ArrowDownward,
-                            contentDescription = "Move down",
-                            tint =
-                                if (canMoveDown) {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                                },
-                        )
-                    }
+            // Custom-order mode: the whole row is a long-press drag handle, so
+            // the trailing slot just shows a static grip glyph as an affordance.
+            reordering -> {
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Rounded.DragHandle,
+                        contentDescription = "Drag to reorder",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
             selectionMode -> {
-                // Hide overflow/reorder buttons while selecting; keep spacing consistent.
+                // Hide overflow button while selecting; keep spacing consistent.
                 Box(Modifier.size(48.dp))
             }
             else -> {

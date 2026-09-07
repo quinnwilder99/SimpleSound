@@ -5,6 +5,13 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,6 +22,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Favorite
@@ -41,7 +50,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,6 +77,11 @@ import com.simplesound.app.ui.components.TrackRow
 import com.simplesound.app.ui.components.liquidGlass
 import com.simplesound.app.util.CoverImageStore
 import com.simplesound.app.util.trackCountLabel
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
+
+/** Non-track items rendered above the track list (header card + sort header). */
+private const val PLAYLIST_HEADER_ITEMS = 2
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -118,15 +136,35 @@ fun PlaylistDetailScreen(
     val playlistSortFlow = remember(playlistId) { vm.playlistSort(playlistId, defaultSort) }
     val sort by playlistSortFlow.collectAsStateWithLifecycle()
     // Bumped after each custom-order move so the list recomputes from the newly
-    // persisted order. (The custom order lives in SharedPreferences, not a flow,
-    // so we need an explicit recomposition trigger.)
+    // persisted order. (The custom order lives in the Room-backed store, not a
+    // flow observed here, so we need an explicit recomposition trigger.)
     var customOrderVersion by remember { mutableStateOf(0) }
     val customOrderMode = sort == com.simplesound.app.data.model.SortOption.CUSTOM_ORDER
-    val tracks =
+    val sortedTracks =
         remember(playlistTracks, sort, customOrderVersion) {
             vm.sortPlaylistTracks(playlistId, playlistTracks, sort)
         }
+    // Local, mutable working copy so a drag-to-reorder updates the list instantly
+    // while the gesture is still in flight. Re-seeded whenever the underlying
+    // sorted list changes identity (sort switch, tracks added/removed, or the
+    // customOrderVersion bump right after a reorder is persisted).
+    var tracks by remember(sortedTracks) { mutableStateOf(sortedTracks) }
     val editable = playlist.kind == PlaylistKind.USER
+
+    // ---- Drag-to-reorder (custom order only) ----
+    val listState = rememberLazyListState()
+    val haptics = LocalHapticFeedback.current
+    val reorderState =
+        rememberReorderableLazyListState(listState) { from, to ->
+            val fromIndex = from.index - PLAYLIST_HEADER_ITEMS
+            val toIndex = to.index - PLAYLIST_HEADER_ITEMS
+            if (fromIndex in tracks.indices && toIndex in tracks.indices) {
+                tracks = tracks.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+                // A soft tick each time the row crosses a neighbour, so the reorder
+                // feels physical rather than silent.
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+        }
 
     var menuOpen by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
@@ -226,6 +264,7 @@ fun PlaylistDetailScreen(
     ) { inner ->
         Box(Modifier.padding(inner).fillMaxSize()) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 160.dp),
             ) {
@@ -269,42 +308,66 @@ fun PlaylistDetailScreen(
                 items(tracks, key = { it.id }) { track ->
                     val selected = track.id in selectedIds
                     val index = tracks.indexOf(track)
-                    TrackRow(
-                        track = track,
-                        selectionMode = selectionMode,
-                        selected = selected,
-                        onLongClick = { toggleSelected(track.id) },
-                        onClick = {
-                            if (selectionMode) {
-                                toggleSelected(track.id)
+                    ReorderableItem(reorderState, key = track.id, enabled = customOrderMode) { isDragging ->
+                        // Lift the row and give it a small, fast wiggle while it's
+                        // being dragged — the "picked up" cue that replaces the
+                        // old up/down arrows.
+                        val lift by animateDpAsState(
+                            targetValue = if (isDragging) 8.dp else 0.dp,
+                            label = "reorder-lift",
+                        )
+                        val wiggle =
+                            if (isDragging) {
+                                val transition = rememberInfiniteTransition(label = "reorder-wiggle")
+                                val angle by transition.animateFloat(
+                                    initialValue = -1.4f,
+                                    targetValue = 1.4f,
+                                    animationSpec =
+                                        infiniteRepeatable(
+                                            animation = tween(durationMillis = 110, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse,
+                                        ),
+                                    label = "reorder-wiggle-angle",
+                                )
+                                angle
                             } else {
-                                player.playQueue(tracks, index, playlist.name)
-                                onOpenNowPlaying()
+                                0f
                             }
-                        },
-                        onMore = { sheetTrack = track },
-                        customOrderMode = customOrderMode,
-                        canMoveUp = selectionMode && index > 0,
-                        canMoveDown = selectionMode && index < tracks.lastIndex,
-                        onMoveUp = {
-                            vm.moveTrackInCustomOrder(
-                                playlistId,
-                                track.id,
-                                up = true,
-                                tracks.map { it.id },
-                            )
-                            customOrderVersion++
-                        },
-                        onMoveDown = {
-                            vm.moveTrackInCustomOrder(
-                                playlistId,
-                                track.id,
-                                up = false,
-                                tracks.map { it.id },
-                            )
-                            customOrderVersion++
-                        },
-                    )
+                        TrackRow(
+                            track = track,
+                            modifier =
+                                Modifier
+                                    .shadow(lift, RoundedCornerShape(20.dp))
+                                    .graphicsLayer { rotationZ = wiggle },
+                            handleModifier =
+                                if (customOrderMode) {
+                                    Modifier.longPressDraggableHandle(
+                                        onDragStarted = {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        },
+                                        onDragStopped = {
+                                            vm.setPlaylistCustomOrder(playlistId, tracks.map { it.id })
+                                            customOrderVersion++
+                                        },
+                                    )
+                                } else {
+                                    Modifier
+                                },
+                            selectionMode = selectionMode,
+                            selected = selected,
+                            reordering = customOrderMode,
+                            onLongClick = { if (!customOrderMode) toggleSelected(track.id) },
+                            onClick = {
+                                if (selectionMode) {
+                                    toggleSelected(track.id)
+                                } else {
+                                    player.playQueue(tracks, index, playlist.name)
+                                    onOpenNowPlaying()
+                                }
+                            },
+                            onMore = { sheetTrack = track },
+                        )
+                    }
                 }
             }
 

@@ -153,12 +153,15 @@ class AppViewModel
             option: SortOption,
         ) = repository.sortPlaylistTracks(playlistId, tracks, option)
 
-        fun moveTrackInCustomOrder(
+        /**
+         * Persist an explicit new track ordering for [playlistId] as its custom order.
+         * [orderedTrackIds] is expected to be the playlist's full, current track-id
+         * list in the order the user just dragged them into.
+         */
+        fun setPlaylistCustomOrder(
             playlistId: String,
-            trackId: Long,
-            up: Boolean,
-            currentOrder: List<Long>,
-        ) = repository.moveTrackInCustomOrder(playlistId, trackId, up, currentOrder)
+            orderedTrackIds: List<Long>,
+        ) = repository.setCustomOrder(playlistId, orderedTrackIds)
 
         fun searchTracks(query: String) = repository.searchTracks(query)
 
