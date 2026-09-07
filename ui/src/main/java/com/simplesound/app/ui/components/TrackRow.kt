@@ -30,11 +30,12 @@ import com.simplesound.app.data.model.Track
  *
  * When [selectionMode] is true the row shows a selection indicator instead of the
  * overflow button and toggles selection on tap (rather than playing). A long-press
- * enters selection mode via [onLongClick].
+ * enters selection mode via [onLongClick]; pass `null` to disable the long-press
+ * (e.g. when the caller is using it to start a drag instead).
  *
- * When [reordering] is true the row shows a drag-handle glyph on the right and
- * [handleModifier] (supplied by the caller as a long-press drag handle) is applied
- * to the whole row, so the user reorders by pressing and dragging the track itself.
+ * [handleModifier] is applied to the whole row so the caller can turn it into a
+ * long-press drag handle for reordering. While a track is actually being dragged
+ * ([dragging] true) its trailing overflow menu is swapped for a grip glyph.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -45,8 +46,8 @@ fun TrackRow(
     modifier: Modifier = Modifier,
     selectionMode: Boolean = false,
     selected: Boolean = false,
-    onLongClick: () -> Unit = {},
-    reordering: Boolean = false,
+    onLongClick: (() -> Unit)? = {},
+    dragging: Boolean = false,
     handleModifier: Modifier = Modifier,
 ) {
     Row(
@@ -72,11 +73,11 @@ fun TrackRow(
                     showGloss = selected,
                     showRim = selected,
                 )
-                // While reordering, the whole row is a long-press drag handle, so
-                // combinedClickable must not also claim the long-press gesture.
+                // onLongClick is null when the caller uses the long-press to start
+                // a drag instead, so combinedClickable must not also claim it.
                 .combinedClickable(
                     onClick = onClick,
-                    onLongClick = if (reordering) null else onLongClick,
+                    onLongClick = onLongClick,
                 )
                 .then(handleModifier)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -124,9 +125,9 @@ fun TrackRow(
             )
         }
         when {
-            // Custom-order mode: the whole row is a long-press drag handle, so
-            // the trailing slot just shows a static grip glyph as an affordance.
-            reordering -> {
+            // Only while a track is actually held for dragging does its trailing
+            // slot swap the overflow menu for a grip glyph.
+            dragging -> {
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Rounded.DragHandle,

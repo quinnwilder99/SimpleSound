@@ -355,8 +355,13 @@ fun PlaylistDetailScreen(
                                 },
                             selectionMode = selectionMode,
                             selected = selected,
-                            reordering = customOrderMode,
-                            onLongClick = { if (!customOrderMode) toggleSelected(track.id) },
+                            dragging = isDragging,
+                            onLongClick =
+                                if (customOrderMode) {
+                                    null
+                                } else {
+                                    { toggleSelected(track.id) }
+                                },
                             onClick = {
                                 if (selectionMode) {
                                     toggleSelected(track.id)
