@@ -84,6 +84,8 @@ class MusicRepository
             const val KEY_QUEUE_TITLE = "last_queue_title"
             const val KEY_QUEUE_TRACK_IDS = "last_queue_track_ids"
             const val KEY_QUEUE_INDEX = "last_queue_index"
+            const val KEY_SHUFFLE_ENABLED = "last_shuffle_enabled"
+            const val KEY_REPEAT_MODE = "last_repeat_mode"
 
             const val NATIVE_LIMIT = 100
         }
@@ -330,6 +332,30 @@ class MusicRepository
 
         /** The persisted queue index, or -1 if none was saved. */
         fun lastQueueIndex(): Int = prefs.getInt(KEY_QUEUE_INDEX, -1)
+
+        // ---------- Playback modes (shuffle / repeat) ----------
+        //
+        // Like the last-played track and queue above, shuffle and repeat only live on
+        // the in-memory Media3 [androidx.media3.common.Player] otherwise, so they're
+        // silently lost whenever the OS kills the process (e.g. the app is backgrounded
+        // for a while) rather than just the Activity. Persisted here so they survive
+        // that the same way the queue and resume position already do.
+
+        /** Persist whether shuffle is currently on. */
+        fun saveShuffleEnabled(enabled: Boolean) {
+            prefs.edit().putBoolean(KEY_SHUFFLE_ENABLED, enabled).apply()
+        }
+
+        /** The persisted shuffle state, or false (off) if none was saved. */
+        fun lastShuffleEnabled(): Boolean = prefs.getBoolean(KEY_SHUFFLE_ENABLED, false)
+
+        /** Persist the current repeat mode: 0 = off, 1 = repeat all, 2 = repeat one. */
+        fun saveRepeatMode(mode: Int) {
+            prefs.edit().putInt(KEY_REPEAT_MODE, mode).apply()
+        }
+
+        /** The persisted repeat mode (0 = off, 1 = all, 2 = one), or 0 if none was saved. */
+        fun lastRepeatMode(): Int = prefs.getInt(KEY_REPEAT_MODE, 0)
 
         // ---------- Library loading ----------
 

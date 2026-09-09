@@ -58,6 +58,19 @@ class PlayerController
         private var pendingQueueRestore: PendingQueueRestore? = null
 
         /**
+         * Set by [restorePlaybackModes] when it runs before [connect] has produced a
+         * [MediaController] (the normal case: [MainActivity] restores state in
+         * onCreate, before onStart calls [connect]). Applied to the real controller
+         * once it's available -- cleared once it succeeds. Without this, a restored
+         * shuffle/repeat preference would only ever update the [_isShuffleOn]/
+         * [_repeatMode] flows and never actually reach the underlying [Player], so
+         * shuffle/repeat would keep resetting to off whenever the OS killed the
+         * process (see saveShuffleEnabled/saveRepeatMode in MusicRepository).
+         */
+        private var pendingShuffleEnabled: Boolean? = null
+        private var pendingRepeatMode: Int? = null
+
+        /**
          * Builds the [MediaItem] fed to the [MediaController]/[MediaSession]. The track's
          * own content URI is stashed in [MediaMetadata.extras] so [TrackArtworkBitmapLoader]
          * can decode its *embedded* per-track picture for the lock-screen/notification
@@ -216,12 +229,7 @@ class PlayerController
                 }
 
                 override fun onRepeatModeChanged(repeatMode: Int) {
-                    _repeatMode.value =
-                        when (repeatMode) {
-                            Player.REPEAT_MODE_ONE -> 2
-                            Player.REPEAT_MODE_ALL -> 1
-                            else -> 0
-                        }
+                    _repeatMode.value = repeatModeToApp(repeatMode)
                 }
             }
 
@@ -232,13 +240,18 @@ class PlayerController
             future.addListener({
                 val c = runCatching { future.get() }.getOrNull() ?: return@addListener
                 controller = c.also { it.addListener(listener) }
-                _isShuffleOn.value = controller?.shuffleModeEnabled == true
-                _repeatMode.value =
-                    when (controller?.repeatMode) {
-                        Player.REPEAT_MODE_ONE -> 2
-                        Player.REPEAT_MODE_ALL -> 1
-                        else -> 0
-                    }
+                // Apply a pending restore (requested before this controller existed)
+                // to the real player first, so the flows below then read back
+                // whatever the player actually ends up holding -- either the just-applied
+                // restored preference, or (if nothing was pending) the ongoing session's
+                // own live state, e.g. when the service process survived and this is
+                // just a fresh Activity/MediaController reconnecting to it.
+                pendingShuffleEnabled?.let { c.shuffleModeEnabled = it }
+                pendingShuffleEnabled = null
+                pendingRepeatMode?.let { c.repeatMode = appRepeatModeToPlayer(it) }
+                pendingRepeatMode = null
+                _isShuffleOn.value = c.shuffleModeEnabled
+                _repeatMode.value = repeatModeToApp(c.repeatMode)
                 // Only overwrite the duration from the (possibly still-empty) real
                 // controller when it actually has one -- a restoreQueue()/
                 // restoreLastPlayedTrack() call earlier in onCreate (before this
@@ -391,6 +404,49 @@ class PlayerController
                     else -> Player.REPEAT_MODE_OFF
                 }
         }
+
+        /**
+         * Re-applies a previously persisted shuffle/repeat preference. [repeatMode] uses
+         * the app's own encoding (0 = off, 1 = repeat all, 2 = repeat one -- same as
+         * [repeatMode]'s flow), not [Player]'s constants. Called from `MainActivity.onCreate`
+         * alongside [restoreQueue]/[restoreLastPlayedTrack], since shuffle/repeat are just
+         * as ephemeral as those otherwise -- see [MutableStateFlow] docs above and
+         * MusicRepository.saveShuffleEnabled/saveRepeatMode.
+         *
+         * Updates the flows immediately (so the UI reflects the restored state right
+         * away, same as the queue/track restores) and either applies it to the live
+         * controller now, or stashes it in [pendingShuffleEnabled]/[pendingRepeatMode]
+         * for [connect] to apply once the controller exists.
+         */
+        fun restorePlaybackModes(
+            shuffleEnabled: Boolean,
+            repeatMode: Int,
+        ) {
+            _isShuffleOn.value = shuffleEnabled
+            _repeatMode.value = repeatMode
+            val c = controller
+            if (c != null) {
+                c.shuffleModeEnabled = shuffleEnabled
+                c.repeatMode = appRepeatModeToPlayer(repeatMode)
+            } else {
+                pendingShuffleEnabled = shuffleEnabled
+                pendingRepeatMode = repeatMode
+            }
+        }
+
+        private fun appRepeatModeToPlayer(mode: Int): Int =
+            when (mode) {
+                2 -> Player.REPEAT_MODE_ONE
+                1 -> Player.REPEAT_MODE_ALL
+                else -> Player.REPEAT_MODE_OFF
+            }
+
+        private fun repeatModeToApp(mode: Int): Int =
+            when (mode) {
+                Player.REPEAT_MODE_ONE -> 2
+                Player.REPEAT_MODE_ALL -> 1
+                else -> 0
+            }
 
         fun setSpeed(speed: Float) {
             val s = speed.coerceIn(0.1f, 2.0f)

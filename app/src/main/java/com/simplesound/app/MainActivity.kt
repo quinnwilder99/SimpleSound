@@ -109,6 +109,10 @@ class MainActivity : ComponentActivity() {
             // Media3 controller (paused) so tapping Play resumes from this spot.
             player.restoreLastPlayedTrack(live ?: snapshot, savedPosition)
         }
+        // Restore shuffle/repeat the same way as the queue/track above -- they live
+        // only on the in-memory Player otherwise, so they'd silently reset to off
+        // whenever the OS killed the process instead of just backgrounding the Activity.
+        player.restorePlaybackModes(musicRepository.lastShuffleEnabled(), musicRepository.lastRepeatMode())
         // Persist the full snapshot of every subsequently played track so the bar
         // survives the next restart with correct title/artist even offline. We
         // also persist the current playback position so playback can resume.
@@ -136,6 +140,14 @@ class MainActivity : ComponentActivity() {
                 // Otherwise the queue is empty only because a saved queue hasn't
                 // finished restoring yet — leave the persisted snapshot alone.
             }
+        }
+        // Persist shuffle/repeat whenever they change, same as the queue and
+        // last-played track above -- see restorePlaybackModes for why.
+        lifecycleScope.launch {
+            player.isShuffleOn.collect { musicRepository.saveShuffleEnabled(it) }
+        }
+        lifecycleScope.launch {
+            player.repeatMode.collect { musicRepository.saveRepeatMode(it) }
         }
         // Once the device library finishes loading, the persisted snapshot (which has
         // a placeholder duration/album) can be upgraded to the full live [Track] for
