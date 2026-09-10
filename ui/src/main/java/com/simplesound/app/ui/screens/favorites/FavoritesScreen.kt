@@ -43,7 +43,10 @@ fun FavoritesScreen(
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        // Leave room at the bottom so the last row of cards clears the global
+        // mini player, which floats over every screen's bottom edge. Matches the
+        // 96.dp allowance the Playlists tab uses.
+        contentPadding = PaddingValues(start = 8.dp, top = 8.dp, end = 8.dp, bottom = 96.dp),
     ) {
         items(playlists, key = { it.id }) { pl ->
             PlaylistGridCard(
