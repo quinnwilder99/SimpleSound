@@ -258,15 +258,31 @@ class PlayerController
                 // future resolved) may have already primed it from persisted data,
                 // and a fresh controller reports 0 until media is loaded below.
                 controller?.duration?.takeIf { it > 0 }?.let { _durationMs.value = it }
-                updateProgressPolling()
                 // Prefer finishing a queue restore that couldn't run earlier because
-                // the controller wasn't ready yet; fall back to the single-track path.
+                // the controller wasn't ready yet. Otherwise, if the session already
+                // holds real media, it means the service kept running (and could have
+                // auto-advanced through several tracks, e.g. in response to lock-screen
+                // controls) while this Activity was stopped and released its previous
+                // controller in onStop() -- resync every flow from the session's actual
+                // live state now rather than leaving them frozen at whatever they were
+                // the moment we disconnected. Without this, reopening the app after
+                // playback moved on in the background shows (and then persists, via the
+                // lastPlayedTrack/queue collectors in MainActivity) the track that was
+                // playing when the app was backgrounded, not the one actually playing
+                // now -- and every other transport control looks broken relative to a
+                // display that never caught up. Fall back to the single-track restore
+                // path only when the controller is genuinely empty.
                 val pendingQueue = pendingQueueRestore
-                if (pendingQueue != null) {
-                    prepareRestoredQueue(pendingQueue.tracks, pendingQueue.startIndex, pendingQueue.positionMs)
-                } else {
-                    maybePrepareRestoredTrack()
+                when {
+                    pendingQueue != null ->
+                        prepareRestoredQueue(pendingQueue.tracks, pendingQueue.startIndex, pendingQueue.positionMs)
+                    c.mediaItemCount > 0 -> {
+                        syncCurrentItem()
+                        _isPlaying.value = c.isPlaying
+                    }
+                    else -> maybePrepareRestoredTrack()
                 }
+                updateProgressPolling()
             }, ContextCompat.getMainExecutor(context))
         }
 
