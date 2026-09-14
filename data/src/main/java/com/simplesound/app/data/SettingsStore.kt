@@ -3,10 +3,12 @@ package com.simplesound.app.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.simplesound.app.data.model.EdgeBarSide
 import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Tab
 import com.simplesound.app.data.model.TabSetting
@@ -59,6 +61,13 @@ class SettingsStore
             // PlaybackService, not just the UI layer, since the fade has to happen
             // even while the app's Activity/ViewModel isn't alive.
             val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
+
+            // "Edge control bar": a slim vertical play/next/previous bar docked to a
+            // screen edge, shown on the lock screen instead of the default Android
+            // media notification. Read directly by PlaybackService (not just the UI
+            // layer), same reasoning as CROSSFADE_SECONDS above.
+            val EDGE_BAR_ENABLED = booleanPreferencesKey("edge_bar_enabled")
+            val EDGE_BAR_SIDE = stringPreferencesKey("edge_bar_side")
         }
 
         val accent: Flow<AccentColor> =
@@ -97,6 +106,24 @@ class SettingsStore
 
         suspend fun setCrossfadeSeconds(seconds: Int) {
             context.dataStore.edit { it[Keys.CROSSFADE_SECONDS] = seconds.coerceIn(0, MAX_CROSSFADE_SECONDS) }
+        }
+
+        /** Whether the lock-screen edge control bar is on; true (the default) unless the
+         *  user has turned it off in Settings > Edge control bar, in which case the
+         *  default Android lock-screen media notification is used instead. */
+        val edgeBarEnabled: Flow<Boolean> =
+            context.dataStore.data.map { prefs -> prefs[Keys.EDGE_BAR_ENABLED] ?: true }
+
+        /** Which screen edge the bar docks to; [EdgeBarSide.RIGHT] is the default. */
+        val edgeBarSide: Flow<EdgeBarSide> =
+            context.dataStore.data.map { prefs -> EdgeBarSide.fromName(prefs[Keys.EDGE_BAR_SIDE]) }
+
+        suspend fun setEdgeBarEnabled(enabled: Boolean) {
+            context.dataStore.edit { it[Keys.EDGE_BAR_ENABLED] = enabled }
+        }
+
+        suspend fun setEdgeBarSide(side: EdgeBarSide) {
+            context.dataStore.edit { it[Keys.EDGE_BAR_SIDE] = side.name }
         }
 
         /**

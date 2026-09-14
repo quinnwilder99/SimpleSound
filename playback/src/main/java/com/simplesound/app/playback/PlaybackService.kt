@@ -1,19 +1,25 @@
 ﻿package com.simplesound.app.playback
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.SettingsStore
+import com.simplesound.app.data.model.EdgeBarSide
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +39,43 @@ class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
 
+    // ---- Edge control bar (lock-screen control screen) ----
+    private lateinit var lockScreenControl: LockScreenControlLauncher
+
+    private val screenStateReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context,
+                intent: Intent,
+            ) {
+                when (intent.action) {
+                    Intent.ACTION_SCREEN_ON -> lockScreenControl.screenOn = true
+                    // ACTION_SCREEN_OFF and the unlock broadcast both mean "don't show
+                    // it right now" -- screenOn=false covers the former; the latter is
+                    // caught by refresh() re-checking isKeyguardLocked either way, but
+                    // calling it explicitly here avoids relaunching it right after the
+                    // user unlocks, in the gap before the next refresh trigger.
+                    Intent.ACTION_SCREEN_OFF -> lockScreenControl.screenOn = false
+                    Intent.ACTION_USER_PRESENT -> lockScreenControl.refresh()
+                }
+            }
+        }
+
+    private val lockScreenControlListener =
+        object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) = lockScreenControl.refresh()
+
+            override fun onTimelineChanged(
+                timeline: Timeline,
+                reason: Int,
+            ) = lockScreenControl.refresh()
+
+            override fun onMediaItemTransition(
+                mediaItem: MediaItem?,
+                reason: Int,
+            ) = lockScreenControl.refresh()
+        }
+
     private val sleepHandler = Handler(Looper.getMainLooper())
     private var sleepRunnable: Runnable? = null
     private var sleepTicker: Runnable? = null
@@ -49,6 +92,11 @@ class PlaybackService : MediaSessionService() {
     private var crossfadePlayer: ExoPlayer? = null
     private var crossfadeRampRunnable: Runnable? = null
     private var crossfadeWatchRunnable: Runnable? = null
+
+    // Mirrored locally so each settings collector below can pass LockScreenControlLauncher
+    // both values together without waiting on the other flow to also emit.
+    private var edgeBarEnabled: Boolean = true
+    private var edgeBarSide: EdgeBarSide = EdgeBarSide.Default
 
     // Set right before *we* programmatically skip `player` ahead to start a
     // crossfade, so the resulting onMediaItemTransition callback (fired for that
@@ -180,10 +228,35 @@ class PlaybackService : MediaSessionService() {
                 .build()
         restoreSleepTimerIfNeeded()
 
+        lockScreenControl = LockScreenControlLauncher(this, player)
+        player.addListener(lockScreenControlListener)
+        ContextCompat.registerReceiver(
+            this,
+            screenStateReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_USER_PRESENT)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+
         serviceScope.launch {
             settingsStore.crossfadeSeconds.collect { seconds ->
                 crossfadeSeconds = seconds
                 if (seconds <= 0) cancelActiveCrossfade()
+            }
+        }
+        serviceScope.launch {
+            settingsStore.edgeBarEnabled.collect { enabled ->
+                edgeBarEnabled = enabled
+                lockScreenControl.setSettings(enabled, edgeBarSide)
+            }
+        }
+        serviceScope.launch {
+            settingsStore.edgeBarSide.collect { side ->
+                edgeBarSide = side
+                lockScreenControl.setSettings(edgeBarEnabled, side)
             }
         }
     }
@@ -399,6 +472,7 @@ class PlaybackService : MediaSessionService() {
         stopCrossfadeWatcher()
         cancelActiveCrossfade()
         cancelScheduledRecordPlay()
+        runCatching { unregisterReceiver(screenStateReceiver) }
         serviceScope.cancel()
         mediaSession?.run {
             player.release()
@@ -418,6 +492,11 @@ class PlaybackService : MediaSessionService() {
         const val ACTION_SET_SLEEP_TIMER = "com.simplesound.app.SET_SLEEP_TIMER"
         const val ACTION_CANCEL_SLEEP_TIMER = "com.simplesound.app.CANCEL_SLEEP_TIMER"
         const val EXTRA_MINUTES = "minutes"
+
+        /** Matched by an intent-filter on LockScreenControlActivity (:app) -- see
+         *  [LockScreenControlLauncher] for why this is a broadcast-style action rather
+         *  than a direct class reference. */
+        const val ACTION_SHOW_LOCK_CONTROL = "com.simplesound.app.SHOW_LOCK_CONTROL"
 
         private val _sleepTimerActive = MutableStateFlow(false)
         val sleepTimerActive: StateFlow<Boolean> = _sleepTimerActive

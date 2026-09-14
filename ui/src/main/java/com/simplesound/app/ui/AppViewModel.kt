@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.simplesound.app.data.DEFAULT_PLAYLIST_SORT
 import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.SettingsStore
+import com.simplesound.app.data.model.EdgeBarSide
 import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Tab
 import com.simplesound.app.data.model.TabSetting
@@ -52,6 +53,17 @@ class AppViewModel
             settings.crossfadeSeconds
                 .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
+        /** Whether the lock-screen edge control bar replaces the default Android media
+         *  notification; true by default. The overlay itself lives in PlaybackService. */
+        val edgeControlBarEnabled =
+            settings.edgeBarEnabled
+                .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+        /** Which edge the bar docks to; [EdgeBarSide.RIGHT] by default. */
+        val edgeControlBarSide =
+            settings.edgeBarSide
+                .stateIn(viewModelScope, SharingStarted.Eagerly, EdgeBarSide.Default)
+
         // Repository-backed library flows.
         val tracks = repository.tracks
         val userPlaylists = repository.userPlaylists
@@ -91,6 +103,10 @@ class AppViewModel
         fun setTracksSort(option: SortOption) = viewModelScope.launch { settings.setTracksSort(option) }
 
         fun setCrossfadeSeconds(seconds: Int) = viewModelScope.launch { settings.setCrossfadeSeconds(seconds) }
+
+        fun setEdgeControlBarEnabled(enabled: Boolean) = viewModelScope.launch { settings.setEdgeBarEnabled(enabled) }
+
+        fun setEdgeControlBarSide(side: EdgeBarSide) = viewModelScope.launch { settings.setEdgeBarSide(side) }
 
         /**
          * In-memory cache of each playlist's last-known sort option. Seeding new

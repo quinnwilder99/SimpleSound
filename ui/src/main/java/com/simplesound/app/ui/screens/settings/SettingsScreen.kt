@@ -47,6 +47,7 @@ fun SettingsScreen(
     onAccentColor: () -> Unit = {},
     onSleepTimer: () -> Unit = {},
     onCrossfade: () -> Unit = {},
+    onEdgeControlBar: () -> Unit = {},
     onAbout: () -> Unit = {},
 ) {
     Scaffold(
@@ -120,6 +121,15 @@ fun SettingsScreen(
                     title = "Crossfade",
                     subtitle = "Smoothly blend the end of one track into the next",
                     onClick = onCrossfade,
+                )
+            }
+
+            // ---- Edge control bar ----
+            item {
+                SettingsRow(
+                    title = "Edge control bar",
+                    subtitle = "Replace the lock screen player with a slim edge bar",
+                    onClick = onEdgeControlBar,
                 )
             }
 

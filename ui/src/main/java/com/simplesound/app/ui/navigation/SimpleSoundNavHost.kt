@@ -25,6 +25,7 @@ import com.simplesound.app.ui.screens.search.SearchScreen
 import com.simplesound.app.ui.screens.settings.AboutScreen
 import com.simplesound.app.ui.screens.settings.AccentColorScreen
 import com.simplesound.app.ui.screens.settings.CrossfadeScreen
+import com.simplesound.app.ui.screens.settings.EdgeControlBarScreen
 import com.simplesound.app.ui.screens.settings.ManageTabsScreen
 import com.simplesound.app.ui.screens.settings.SettingsScreen
 import com.simplesound.app.ui.screens.settings.SleepTimerScreen
@@ -37,6 +38,7 @@ object Routes {
     const val ACCENT_COLOR = "accent_color"
     const val SLEEP_TIMER = "sleep_timer"
     const val CROSSFADE = "crossfade"
+    const val EDGE_CONTROL_BAR = "edge_control_bar"
     const val ABOUT = "about"
     const val PLAYLIST = "playlist"
     const val NOW_PLAYING = "now_playing"
@@ -78,6 +80,7 @@ fun SimpleSoundNavHost(
                     onAccentColor = { navController.navigate(Routes.ACCENT_COLOR) },
                     onSleepTimer = { navController.navigate(Routes.SLEEP_TIMER) },
                     onCrossfade = { navController.navigate(Routes.CROSSFADE) },
+                    onEdgeControlBar = { navController.navigate(Routes.EDGE_CONTROL_BAR) },
                     onAbout = { navController.navigate(Routes.ABOUT) },
                 )
             }
@@ -92,6 +95,9 @@ fun SimpleSoundNavHost(
             }
             composable(Routes.CROSSFADE) {
                 CrossfadeScreen(vm = vm, onBack = { navController.popBackStack() })
+            }
+            composable(Routes.EDGE_CONTROL_BAR) {
+                EdgeControlBarScreen(vm = vm, onBack = { navController.popBackStack() })
             }
             composable(Routes.ABOUT) {
                 AboutScreen(onBack = { navController.popBackStack() })

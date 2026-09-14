@@ -13,6 +13,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Lets the full-screen notification in LockScreenControlLauncher actually launch
+         LockScreenControlActivity over the lock screen, instead of just sitting as a
+         normal notification. Normal-granted at install on most versions; Android 14+
+         can still revoke it for an app it doesn't consider a dialer/alarm app, in which
+         case the notification posts but never launches. Settings > Apps > Special app
+         access > Full screen intent lets the user re-grant it by hand. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <application
         android:name=".SimpleSoundApp"
         android:allowBackup="true"
@@ -31,6 +39,27 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- The lock-screen "edge control bar" surface (Settings > Edge control bar).
+             showWhenLocked lets it draw over a secure keyguard, the only mechanism
+             Android still allows for this (see LockScreenControlLauncher's doc
+             comment for why a plain overlay window doesn't work). singleInstance +
+             excludeFromRecents: PlaybackService launches it fresh each qualifying
+             screen-on rather than ever resuming a lingering instance (see the
+             Activity's doc comment). Not exported: only PlaybackService (this app)
+             ever sends ACTION_SHOW_LOCK_CONTROL. -->
+        <activity
+            android:name=".LockScreenControlActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:theme="@style/Theme.SimpleSound">
+            <intent-filter>
+                <action android:name="com.simplesound.app.SHOW_LOCK_CONTROL" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
