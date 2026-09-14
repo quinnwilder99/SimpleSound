@@ -320,6 +320,23 @@ class PlayerController
 
         fun playSingle(track: Track) = playQueue(listOf(track), 0, "Queue")
 
+        /**
+         * Restarts the currently loaded track from the beginning without touching
+         * the queue. Used by the Now Playing screen's "..." > Play action, which
+         * must NOT go through [playSingle]/[playQueue]: those replace the live
+         * queue with a one-track queue, which silently strands the player on that
+         * single track -- Next/Previous stop doing anything (there's nothing to
+         * seek to) until the user starts fresh playback from a track list. See
+         * the "..." menu wiring in NowPlayingScreen.
+         */
+        fun restartCurrentTrack() {
+            val c = controller ?: return
+            if (c.mediaItemCount == 0) return
+            c.seekTo(0L)
+            _positionMs.value = 0L
+            c.play()
+        }
+
         fun togglePlayPause() {
             val c = controller ?: return
             if (c.mediaItemCount == 0) {

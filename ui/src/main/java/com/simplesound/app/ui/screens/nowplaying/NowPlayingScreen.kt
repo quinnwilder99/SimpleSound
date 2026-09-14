@@ -361,7 +361,7 @@ fun NowPlayingScreen(
         TrackActionsSheet(
             track = current,
             isFavorite = current.id in favoriteIds,
-            onPlay = { player.playSingle(current) },
+            onPlay = { player.restartCurrentTrack() },
             onToggleFavorite = { vm.toggleFavoriteTrack(current.id) },
             onAddToPlaylist = {
                 showActionsSheet = false
