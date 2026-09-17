@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +34,10 @@ import androidx.compose.ui.unit.dp
 /** Link to the author's online CV & portfolio. */
 private const val PORTFOLIO_URL = "https://quinnwilder99.github.io/RikkWebDemo/"
 
+/** Published privacy policy. PRIVACY.md at the repo root is the source-of-truth text;
+ *  this links its rendered GitHub view so it always reflects whatever's on `main`. */
+private const val PRIVACY_POLICY_URL = "https://github.com/quinnwilder99/SimpleSound/blob/main/PRIVACY.md"
+
 /**
  * About sub-page of Settings. Renders the app's "About" blurb: who made it,
  * what it's built with, and a tappable link to the author's online CV & portfolio.
@@ -40,6 +45,17 @@ private const val PORTFOLIO_URL = "https://quinnwilder99.github.io/RikkWebDemo/"
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    // Read the real installed versionName from the package manager rather than
+    // hardcoding it here, so this can never drift from app/build.gradle.kts's
+    // versionName again (it previously sat stuck on "v1.1.0" through the 1.2.0
+    // release).
+    val versionName =
+        remember {
+            runCatching {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            }.getOrNull()
+        }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -90,36 +106,11 @@ fun AboutScreen(onBack: () -> Unit) {
             )
 
             // Clickable link to the online CV & portfolio (opens in the browser).
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable {
-                            runCatching {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(PORTFOLIO_URL))
-                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                                )
-                            }
-                        }
-                        .padding(vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = "View my CV & portfolio",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Icon(
-                    Icons.AutoMirrored.Rounded.OpenInNew,
-                    contentDescription = "Open CV & portfolio",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
+            ExternalLinkRow(text = "View my CV & portfolio", url = PORTFOLIO_URL)
+
+            // Required by the Play Store listing (App content > Privacy policy) even
+            // though the app collects nothing -- see PRIVACY.md for why that's true.
+            ExternalLinkRow(text = "Privacy policy", url = PRIVACY_POLICY_URL)
 
             Spacer(Modifier.size(4.dp))
 
@@ -151,7 +142,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.size(8.dp))
 
             Text(
-                text = "Version: v1.1.0",
+                text = "Version: ${versionName?.let { "v$it" } ?: "unknown"}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Medium,
@@ -163,5 +154,45 @@ fun AboutScreen(onBack: () -> Unit) {
                 fontWeight = FontWeight.Medium,
             )
         }
+    }
+}
+
+/** A tappable row that opens [url] in the browser. Shared by the CV/portfolio and
+ *  privacy-policy links above. */
+@Composable
+private fun ExternalLinkRow(
+    text: String,
+    url: String,
+) {
+    val context = LocalContext.current
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                }
+                .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Icon(
+            Icons.AutoMirrored.Rounded.OpenInNew,
+            contentDescription = "Open $text",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }

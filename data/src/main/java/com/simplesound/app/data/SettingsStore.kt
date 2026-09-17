@@ -108,11 +108,19 @@ class SettingsStore
             context.dataStore.edit { it[Keys.CROSSFADE_SECONDS] = seconds.coerceIn(0, MAX_CROSSFADE_SECONDS) }
         }
 
-        /** Whether the lock-screen edge control bar is on; true (the default) unless the
-         *  user has turned it off in Settings > Edge control bar, in which case the
-         *  default Android lock-screen media notification is used instead. */
+        /** Whether the lock-screen edge control bar is on; false (the default) until the
+         *  user turns it on in Settings > Edge control bar, in which case the default
+         *  Android lock-screen media notification is used instead.
+         *
+         *  Defaults OFF rather than ON: this feature works by posting a
+         *  USE_FULL_SCREEN_INTENT notification on every screen-on during playback
+         *  (see LockScreenControlLauncher) to jump an Activity over the lock screen --
+         *  a mechanism Google Play's policy reserves for calling/alarm-clock apps.
+         *  Making it opt-in keeps that behavior from firing for every install by
+         *  default, which matters both for Play review and for Android 14+ actually
+         *  granting the permission (see the manifest's USE_FULL_SCREEN_INTENT comment). */
         val edgeBarEnabled: Flow<Boolean> =
-            context.dataStore.data.map { prefs -> prefs[Keys.EDGE_BAR_ENABLED] ?: true }
+            context.dataStore.data.map { prefs -> prefs[Keys.EDGE_BAR_ENABLED] ?: false }
 
         /** Which screen edge the bar docks to; [EdgeBarSide.RIGHT] is the default. */
         val edgeBarSide: Flow<EdgeBarSide> =
