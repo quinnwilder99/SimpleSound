@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.simplesound.data"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 26
