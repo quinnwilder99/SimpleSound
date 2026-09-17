@@ -107,6 +107,47 @@ the features".
 Nothing — the keystore and everything else is in the repo. Just connect the phone
 (USB debugging on) and run `powershell -ExecutionPolicy Bypass -File scripts\deploy.ps1`.
 
+## Building for the Play Store (a different signing key)
+
+Everything above is about the debug build that gets sideloaded onto your own
+phone. The Play Store needs a `release` build signed with a **separate,
+private** upload key — never the committed debug key (Play rejects uploads
+signed with the well-known debug certificate outright).
+
+1. Generate the key once (already done for this project — see below if you
+   need to redo it):
+   ```powershell
+   keytool -genkeypair -v -keystore keystore/simplesound-release.keystore `
+     -alias simplesound-release -keyalg RSA -keysize 2048 -validity 10000
+   ```
+2. Create `keystore.properties` at the repo root (gitignored, never commit it):
+   ```
+   storeFile=keystore/simplesound-release.keystore
+   storePassword=...
+   keyAlias=simplesound-release
+   keyPassword=...
+   ```
+   `app/build.gradle.kts` picks this up automatically and wires a `release`
+   `signingConfig` when the file is present; it's simply absent on CI / fresh
+   clones, which is fine since CI only runs `assembleRelease` to make sure the
+   release build type still compiles, not to upload it anywhere.
+3. Build the artifact Play actually wants (an `.aab`, not an `.apk`):
+   ```powershell
+   ./gradlew :app:bundleRelease
+   ```
+   Output: `app/build/outputs/bundle/release/app-release.aab`.
+4. **Back up `keystore/simplesound-release.keystore` and the two passwords in
+   `keystore.properties` somewhere durable outside this repo** (password
+   manager, encrypted drive) the moment you generate them. If you lose them,
+   Play can never accept an update signed with the same upload key again —
+   recoverable only through Play App Signing's key-reset support process,
+   which is slow and not guaranteed. This key is *not* like the debug
+   key: it is a real secret and must never be committed.
+5. In Play Console, enroll in **Play App Signing** when you create the app —
+   Google then re-signs your upload with its own app signing key for
+   distribution, and the upload key above only needs to authenticate you as
+   the uploader.
+
 If the phone already has a SimpleSound build that was signed with that machine's
 old per-machine `~/.android/debug.keystore`, the first deploy from the new setup
 will hit a signature mismatch. The script stops rather than uninstalling. Recover

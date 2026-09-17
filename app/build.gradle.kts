@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +8,32 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.hilt)
 }
+
+// ---- Release signing (Play Store uploads) ----
+// Loaded from an untracked keystore.properties (see .gitignore) so the real
+// signing secrets never touch git, unlike the deliberately-committed debug
+// key above. Generate one with:
+//   keytool -genkeypair -v -keystore keystore/simplesound-release.keystore \
+//     -alias simplesound-release -keyalg RSA -keysize 2048 -validity 10000
+// then create keystore.properties at the repo root:
+//   storeFile=keystore/simplesound-release.keystore
+//   storePassword=...
+//   keyAlias=simplesound-release
+//   keyPassword=...
+// Absent on CI / fresh clones by design -- the release buildType simply has
+// no signingConfig then, which is fine for `assembleRelease` on CI (it isn't
+// uploaded anywhere) but means a real device/Play upload needs this file
+// present locally. Back up keystore/simplesound-release.keystore and its
+// passwords somewhere durable outside this repo: losing it means Play can
+// never accept an update signed with the same upload key again.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties =
+    Properties().apply {
+        if (keystorePropertiesFile.exists()) {
+            load(FileInputStream(keystorePropertiesFile))
+        }
+    }
+val hasReleaseSigning = keystorePropertiesFile.exists()
 
 // ---- versionCode: derived from the git commit count so it ALWAYS increases ----
 // Every deploy must have a strictly higher versionCode than the build already on
@@ -24,12 +53,12 @@ val gitCommitCount: Int =
 
 android {
     namespace = "com.simplesound.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.simplesound.app"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = maxOf(gitCommitCount, versionCodeFloor)
         versionName = "1.2.0"
         vectorDrawables { useSupportLibrary = true }
@@ -48,6 +77,14 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -56,6 +93,9 @@ android {
         }
         release {
             isMinifyEnabled = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -72,6 +112,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
