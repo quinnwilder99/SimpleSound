@@ -2,6 +2,8 @@ package com.simplesound.app.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.room.withTransaction
+import com.simplesound.app.data.db.AppDatabase
 import com.simplesound.app.data.db.CustomOrderDao
 import com.simplesound.app.data.db.CustomOrderEntity
 import com.simplesound.app.data.db.FavoriteDao
@@ -18,6 +20,7 @@ import com.simplesound.app.data.model.PlaylistKind
 import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Track
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -58,6 +61,7 @@ class MusicRepository
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
+        private val db: AppDatabase,
         private val trackDao: TrackDao,
         private val playlistDao: PlaylistDao,
         private val playlistTrackDao: PlaylistTrackDao,
@@ -90,8 +94,17 @@ class MusicRepository
             const val NATIVE_LIMIT = 100
         }
 
+        // A SupervisorJob alone only stops sibling *cancellation* -- an uncaught
+        // exception from any fire-and-forget Room write below (a rare disk-I/O error,
+        // say) would otherwise hit this thread's default uncaught-exception handler and
+        // crash the whole process, well after the in-memory StateFlow update already
+        // made the UI believe the action succeeded. This handler makes that failure mode
+        // "the DB write silently didn't happen" instead of "the app crashes."
+        private val writeExceptionHandler =
+            CoroutineExceptionHandler { _, _ -> }
+
         /** Background scope for Room writes triggered by synchronous in-memory mutations. */
-        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + writeExceptionHandler)
 
         /**
          * Waits for every write currently in flight on [scope] to finish. Not used by
@@ -186,39 +199,49 @@ class MusicRepository
          */
         private suspend fun migrateLegacyPrefsIfNeeded() {
             if (prefs.getBoolean(KEY_ROOM_MIGRATED, false)) return
-            if (prefs.getBoolean(KEY_LEGACY_INITIALIZED, false)) {
-                val legacyPlaylists =
-                    decodeLegacyPlaylists(prefs.getString(KEY_LEGACY_PLAYLISTS, null))
-                        .orEmpty()
-                        // Drop legacy sample-seed playlists that earlier builds persisted on
-                        // first run (e.g. "GOAT", "Classical") — never real user data.
-                        .filterNot { it.id.startsWith("seed-") }
-                legacyPlaylists.forEachIndexed { index, pl ->
-                    playlistDao.insert(pl.toEntity(position = index))
-                    playlistTrackDao.replaceForPlaylist(pl.id, pl.trackIds)
-                }
-
-                decodeLegacyFavoriteTrackIds(prefs.getString(KEY_LEGACY_FAVORITE_TRACKS, null))
-                    .orEmpty()
-                    .forEach { favoriteDao.add(FavoriteTrackEntity(it)) }
-
-                decodeLegacyCustomOrders(prefs.getString(KEY_LEGACY_CUSTOM_ORDERS, null))
-                    .forEach { (playlistId, ids) ->
-                        customOrderDao.upsert(CustomOrderEntity(playlistId, ids.joinToString(",")))
+            // This is a one-time bootstrap step that runs inside runBlocking() in
+            // init{} — an uncaught exception here would crash Application
+            // construction itself. try/finally guarantees KEY_ROOM_MIGRATED is set
+            // even if a step fails partway, so a single bad launch can't turn into a
+            // permanent boot loop that only clearing app data would escape. The
+            // per-row DAO calls below (REPLACE/IGNORE/upsert) are also idempotent, so
+            // a retry of a partially-completed run can't throw a constraint error.
+            try {
+                if (prefs.getBoolean(KEY_LEGACY_INITIALIZED, false)) {
+                    val legacyPlaylists =
+                        decodeLegacyPlaylists(prefs.getString(KEY_LEGACY_PLAYLISTS, null))
+                            .orEmpty()
+                            // Drop legacy sample-seed playlists that earlier builds persisted on
+                            // first run (e.g. "GOAT", "Classical") — never real user data.
+                            .filterNot { it.id.startsWith("seed-") }
+                    legacyPlaylists.forEachIndexed { index, pl ->
+                        playlistDao.insert(pl.toEntity(position = index))
+                        playlistTrackDao.replaceForPlaylist(pl.id, pl.trackIds)
                     }
 
-                decodeLegacyPlayStats(prefs.getString(KEY_LEGACY_PLAY_STATS, null))
-                    .forEach { (id, stat) -> playStatsDao.upsert(PlayStatsEntity(id, stat.first, stat.second)) }
+                    decodeLegacyFavoriteTrackIds(prefs.getString(KEY_LEGACY_FAVORITE_TRACKS, null))
+                        .orEmpty()
+                        .forEach { favoriteDao.add(FavoriteTrackEntity(it)) }
 
-                prefs.edit()
-                    .remove(KEY_LEGACY_PLAYLISTS)
-                    .remove(KEY_LEGACY_FAVORITE_TRACKS)
-                    .remove(KEY_LEGACY_CUSTOM_ORDERS)
-                    .remove(KEY_LEGACY_PLAY_STATS)
-                    .remove(KEY_LEGACY_INITIALIZED)
-                    .apply()
+                    decodeLegacyCustomOrders(prefs.getString(KEY_LEGACY_CUSTOM_ORDERS, null))
+                        .forEach { (playlistId, ids) ->
+                            customOrderDao.upsert(CustomOrderEntity(playlistId, ids.joinToString(",")))
+                        }
+
+                    decodeLegacyPlayStats(prefs.getString(KEY_LEGACY_PLAY_STATS, null))
+                        .forEach { (id, stat) -> playStatsDao.upsert(PlayStatsEntity(id, stat.first, stat.second)) }
+
+                    prefs.edit()
+                        .remove(KEY_LEGACY_PLAYLISTS)
+                        .remove(KEY_LEGACY_FAVORITE_TRACKS)
+                        .remove(KEY_LEGACY_CUSTOM_ORDERS)
+                        .remove(KEY_LEGACY_PLAY_STATS)
+                        .remove(KEY_LEGACY_INITIALIZED)
+                        .apply()
+                }
+            } finally {
+                prefs.edit().putBoolean(KEY_ROOM_MIGRATED, true).apply()
             }
-            prefs.edit().putBoolean(KEY_ROOM_MIGRATED, true).apply()
         }
 
         // ---------- Last played track (persistence) ----------
@@ -362,13 +385,39 @@ class MusicRepository
         /** Replace sample/stale tracks with a fresh MediaStore scan, if any were found. */
         suspend fun loadDeviceLibrary(context: Context) {
             val scanned = runCatching { MediaStoreScanner.scan(context) }.getOrDefault(emptyList())
-            if (scanned.isNotEmpty()) {
-                trackDao.replaceAll(scanned.map { it.toEntity() })
-                _tracks.value = applyPlayStats(scanned)
-                // The "Favorite tracks" native playlist is derived from the track set,
-                // so a media-scan change must refresh the favorites tab too.
-                recomputeFavorites()
-            }
+            if (scanned.isEmpty()) return
+            val validIds = scanned.map { it.id }
+
+            // Wrapped in runCatching (matching LibrarySyncWorker's own handling of this
+            // same write) so a Room I/O error on this path -- the primary "open the app"
+            // flow, called from MainActivity on every launch -- can't crash the app;
+            // worst case the in-memory library below simply doesn't reflect this scan.
+            val persisted =
+                runCatching {
+                    db.withTransaction {
+                        trackDao.replaceAll(scanned.map { it.toEntity() })
+                        // A track can disappear from MediaStore without ever going through
+                        // deleteTracks() (file deleted outside the app, SD card unmounted,
+                        // another app's cleanup). MediaStore's numeric _ID is not guaranteed
+                        // permanently unique, so leaving these rows behind risks a *new*
+                        // unrelated track later reusing that id and silently inheriting a
+                        // stale favorite/play-stat/playlist-membership row.
+                        favoriteDao.removeMissing(validIds)
+                        playStatsDao.removeMissing(validIds)
+                        playlistTrackDao.deleteMissingTracks(validIds)
+                    }
+                }
+            if (persisted.isFailure) return
+
+            val validIdSet = validIds.toSet()
+            playStats = playStats.filterKeys { it in validIdSet }.toMutableMap()
+            _tracks.value = applyPlayStats(scanned)
+            _favoriteTrackIds.value = _favoriteTrackIds.value.filterTo(mutableSetOf()) { it in validIdSet }
+            _userPlaylists.value =
+                _userPlaylists.value.map { pl -> pl.copy(trackIds = pl.trackIds.filter { it in validIdSet }) }
+            // The "Favorite tracks" native playlist is derived from the track set,
+            // so a media-scan change must refresh the favorites tab too.
+            recomputeFavorites()
         }
 
         /** Overlay persisted [playStats] onto a freshly scanned track list. */
@@ -685,9 +734,14 @@ class MusicRepository
                     pl.copy(trackIds = pl.trackIds.filterNot { it in ids })
                 }
             scope.launch {
-                trackDao.deleteByIds(trackIds)
-                favoriteDao.removeAll(trackIds)
-                playlistTrackDao.deleteByTrackIds(trackIds)
+                // One Room transaction, not three independent writes -- process death
+                // between them used to be able to leave orphaned favorite/cross-ref rows
+                // for a track already gone from the tracks table.
+                db.withTransaction {
+                    trackDao.deleteByIds(trackIds)
+                    favoriteDao.removeAll(trackIds)
+                    playlistTrackDao.deleteByTrackIds(trackIds)
+                }
             }
             recomputeFavorites()
         }
@@ -700,9 +754,10 @@ class MusicRepository
         }
 
         fun playlistById(id: String): Playlist? =
+            // nativePlaylists() already ends with favoriteTracksPlaylist(), so a third
+            // fallback for it here would never be reached.
             _userPlaylists.value.firstOrNull { it.id == id }
                 ?: nativePlaylists().firstOrNull { it.id == id }
-                ?: favoriteTracksPlaylist().takeIf { it.id == id }
 
         private inline fun update(
             id: String,
@@ -728,6 +783,13 @@ class MusicRepository
                     if (it.id == id) transform(it).also { p -> newTrackIds = p.trackIds } else it
                 }
             newTrackIds?.let { ids -> scope.launch { playlistTrackDao.replaceForPlaylist(id, ids) } }
+            // A hearted playlist's snapshot in _favoritesTab is captured by value from
+            // _userPlaylists at the time it's computed (see computeFavoritesTab) -- without
+            // this, adding/removing tracks via this path (addTracksToPlaylist,
+            // removeTrackFromPlaylist, removeTracksFromPlaylist) would leave the Favorites
+            // tab showing a stale track count/list until some unrelated call happened to
+            // call recomputeFavorites() again.
+            recomputeFavorites()
         }
 
         // ---------- Legacy SharedPreferences decoding (migration only) ----------

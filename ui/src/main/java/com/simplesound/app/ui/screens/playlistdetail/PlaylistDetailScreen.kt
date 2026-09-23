@@ -1,7 +1,6 @@
 package com.simplesound.app.ui.screens.playlistdetail
 
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,6 +43,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,6 +76,7 @@ import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
 import com.simplesound.app.ui.components.liquidGlass
 import com.simplesound.app.util.CoverImageStore
+import com.simplesound.app.util.shareTracks
 import com.simplesound.app.util.trackCountLabel
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -109,7 +110,10 @@ fun PlaylistDetailScreen(
         }
 
     if (playlist == null) {
-        onBack()
+        // A LaunchedEffect (not a direct call) so a stale/non-existent playlistId
+        // doesn't pop the back stack once per recomposition while this branch stays
+        // active -- LaunchedEffect only re-runs its body when playlistId changes.
+        LaunchedEffect(playlistId) { onBack() }
         return
     }
     val playlistTracks = vm.tracksByIds(playlist.trackIds)
@@ -302,12 +306,23 @@ fun PlaylistDetailScreen(
                         onSort = { vm.setPlaylistSort(playlistId, it) },
                         onShuffle = { if (tracks.isNotEmpty()) player.playQueue(tracks.shuffled(), 0, playlist.name) },
                         onPlayAll = { if (tracks.isNotEmpty()) player.playQueue(tracks, 0, playlist.name) },
+                        // Custom order is only ever meaningful -- and only ever persisted
+                        // via drag-to-reorder above -- for a real user playlist; offering
+                        // it as a manually-selectable option on a computed playlist would
+                        // let a user "pick" an order that then can't actually be dragged
+                        // into anything but the order it was already showing.
+                        options = if (editable) SortOption.entries else SortOption.entries - SortOption.CUSTOM_ORDER,
                     )
                 }
                 items(tracks, key = { it.id }) { track ->
                     val selected = track.id in selectedIds
                     val index = tracks.indexOf(track)
-                    ReorderableItem(reorderState, key = track.id, enabled = selectionMode) { isDragging ->
+                    // Reordering only makes sense -- and is only safe to persist -- for a
+                    // real user playlist. A computed playlist (Most played, Recently
+                    // played, ...) has no stored order of its own to overwrite; letting a
+                    // drag through here would silently replace its live computed order
+                    // with a stale manual one via setPlaylistCustomOrder below.
+                    ReorderableItem(reorderState, key = track.id, enabled = selectionMode && editable) { isDragging ->
                         // The row being dragged lifts with a shadow.
                         val lift by animateDpAsState(
                             targetValue = if (isDragging) 10.dp else 0.dp,
@@ -350,14 +365,19 @@ fun PlaylistDetailScreen(
                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     },
                                     onDragStopped = {
-                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        vm.setPlaylistCustomOrder(playlistId, tracks.map { it.id })
-                                        // A manual reorder only sticks under CUSTOM_ORDER, so
-                                        // switch to it if some other sort was active.
-                                        if (sort != SortOption.CUSTOM_ORDER) {
-                                            vm.setPlaylistSort(playlistId, SortOption.CUSTOM_ORDER)
+                                        // Defense-in-depth alongside ReorderableItem's `enabled`
+                                        // above: never persist a manual order onto a playlist
+                                        // this screen doesn't allow editing.
+                                        if (editable) {
+                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            vm.setPlaylistCustomOrder(playlistId, tracks.map { it.id })
+                                            // A manual reorder only sticks under CUSTOM_ORDER, so
+                                            // switch to it if some other sort was active.
+                                            if (sort != SortOption.CUSTOM_ORDER) {
+                                                vm.setPlaylistSort(playlistId, SortOption.CUSTOM_ORDER)
+                                            }
+                                            customOrderVersion++
                                         }
-                                        customOrderVersion++
                                     },
                                 ),
                             selectionMode = selectionMode,
@@ -390,13 +410,10 @@ fun PlaylistDetailScreen(
                     }
                 },
                 onAdd = { showAddMany = true },
-                onShare = {
-                    // Share intentionally not implemented yet — surface a clear
-                    // placeholder so the button isn't silently dead.
-                    Toast.makeText(context, "Sharing is not available yet.", Toast.LENGTH_SHORT).show()
-                },
-                onRemove = { if (editable) showRemoveMany = true },
+                onShare = { if (selectedTracks.isNotEmpty()) shareTracks(context, selectedTracks) },
+                onRemove = { showRemoveMany = true },
                 onClear = { clearSelection() },
+                removeEnabled = editable,
             )
         }
     }
@@ -465,14 +482,13 @@ fun PlaylistDetailScreen(
                 sheetTrack = null
                 addOneTrack = t
             },
-            onRemoveFromPlaylist = {
-                if (editable) vm.removeTracksFromPlaylist(playlistId, listOf(t.id))
-            },
+            onRemoveFromPlaylist = { vm.removeTracksFromPlaylist(playlistId, listOf(t.id)) },
             onDetails = {
                 sheetTrack = null
                 detailsTrack = t
             },
             onDismiss = { sheetTrack = null },
+            removeEnabled = editable,
         )
     }
 

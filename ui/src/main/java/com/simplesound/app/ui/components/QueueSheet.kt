@@ -25,6 +25,11 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +65,16 @@ fun QueueSheet(
 ) {
     val sheetState = rememberModalBottomSheetState()
     val title = queueTitle.ifBlank { "Queue" }
+
+    // A move/remove row-icon click closure captures `index` from this composition;
+    // Compose doesn't recompose synchronously on click, so a rapid double-tap can
+    // fire a second time with the same now-stale index (whatever track shifted into
+    // that slot after the first tap gets acted on too). Disabling every row's
+    // move/remove button until `queue` itself changes -- confirming the in-flight
+    // action actually landed -- closes that window without needing PlayerController's
+    // index-based API to change.
+    var actionInFlight by remember { mutableStateOf(false) }
+    LaunchedEffect(queue) { actionInFlight = false }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -131,12 +146,22 @@ fun QueueSheet(
                         QueueRow(
                             track = track,
                             isCurrent = isCurrent,
-                            canMoveUp = index > 0,
-                            canMoveDown = index < queue.lastIndex,
+                            canMoveUp = index > 0 && !actionInFlight,
+                            canMoveDown = index < queue.lastIndex && !actionInFlight,
+                            canRemove = !actionInFlight,
                             onPlay = { onPlay(index) },
-                            onMoveUp = { onMove(index, index - 1) },
-                            onMoveDown = { onMove(index, index + 1) },
-                            onRemove = { onRemove(index) },
+                            onMoveUp = {
+                                actionInFlight = true
+                                onMove(index, index - 1)
+                            },
+                            onMoveDown = {
+                                actionInFlight = true
+                                onMove(index, index + 1)
+                            },
+                            onRemove = {
+                                actionInFlight = true
+                                onRemove(index)
+                            },
                         )
                     }
                 }
@@ -151,6 +176,7 @@ private fun QueueRow(
     isCurrent: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
+    canRemove: Boolean,
     onPlay: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -228,7 +254,7 @@ private fun QueueRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onClick = onRemove) {
+        IconButton(onClick = onRemove, enabled = canRemove) {
             Icon(
                 Icons.Rounded.Close,
                 contentDescription = "Remove from queue",

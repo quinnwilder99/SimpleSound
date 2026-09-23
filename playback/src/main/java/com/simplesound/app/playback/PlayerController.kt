@@ -382,18 +382,15 @@ class PlayerController
             val item = q.removeAt(from)
             q.add(to, item)
             _queue.value = q
-            val currentTrackId = _currentTrack.value?.id
-            trackIndex.clear()
-            val items =
-                q.map { track ->
-                    trackIndex[track.id.toString()] = track
-                    buildMediaItem(track)
-                }
+            // Player.moveMediaItem reorders in place without rebuilding the timeline,
+            // unlike the previous setMediaItems(...) approach, which rebuilt every
+            // MediaItem and forced ExoPlayer to re-prepare/rebuffer the currently
+            // playing item even when the drag only touched unrelated tracks. Track
+            // identity/order doesn't change what trackIndex maps id -> Track, so it
+            // doesn't need to be touched here.
             if (c != null) {
-                val newIndex = q.indexOfFirst { it.id == currentTrackId }.takeIf { it >= 0 } ?: 0
-                val pos = c.currentPosition.coerceAtLeast(0)
-                c.setMediaItems(items, newIndex, pos)
-                _queueIndex.value = newIndex
+                c.moveMediaItem(from, to)
+                _queueIndex.value = c.currentMediaItemIndex
             }
         }
 

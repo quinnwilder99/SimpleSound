@@ -100,6 +100,7 @@ fun PlaylistTrackActionsSheet(
     onRemoveFromPlaylist: () -> Unit,
     onDetails: () -> Unit,
     onDismiss: () -> Unit,
+    removeEnabled: Boolean = true,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
@@ -110,9 +111,14 @@ fun PlaylistTrackActionsSheet(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
             SheetItem(Icons.Rounded.PlaylistAdd, "Add to playlist") { onAddToPlaylist() }
-            SheetItem(Icons.Rounded.RemoveCircleOutline, "Remove from playlist", destructive = true) {
-                onRemoveFromPlaylist()
-                onDismiss()
+            // Hidden rather than shown-but-inert for a non-editable (native/computed)
+            // playlist -- matches this screen's top app bar, which hides its editing
+            // entry points (rename/cover/delete) the same way for the same reason.
+            if (removeEnabled) {
+                SheetItem(Icons.Rounded.RemoveCircleOutline, "Remove from playlist", destructive = true) {
+                    onRemoveFromPlaylist()
+                    onDismiss()
+                }
             }
             SheetItem(Icons.Rounded.Info, "Track details") { onDetails() }
         }

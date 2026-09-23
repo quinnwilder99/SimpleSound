@@ -2,6 +2,7 @@ package com.simplesound.app.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
@@ -14,7 +15,10 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlists")
     suspend fun getAll(): List<PlaylistEntity>
 
-    @Insert
+    // REPLACE (not the @Insert default of ABORT) so the one-time legacy-prefs
+    // migration in MusicRepository can safely re-run a partially-completed insert
+    // loop after process death without throwing SQLiteConstraintException.
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: PlaylistEntity)
 
     @Update

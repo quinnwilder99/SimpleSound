@@ -30,3 +30,19 @@ fun shareTrack(
         }
     context.startActivity(Intent.createChooser(intent, "Share \"${track.title}\""))
 }
+
+/** Share several tracks' audio files at once via Android's share sheet. See [shareTrack]. */
+fun shareTracks(
+    context: Context,
+    tracks: List<Track>,
+) {
+    val uris = ArrayList(tracks.mapNotNull { it.uri.takeIf { uri -> uri.isNotBlank() }?.let(Uri::parse) })
+    if (uris.isEmpty()) return
+    val intent =
+        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "audio/*"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    context.startActivity(Intent.createChooser(intent, "Share ${uris.size} tracks"))
+}

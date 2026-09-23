@@ -92,11 +92,10 @@ fun SelectionActionBar(
  * Selection action bar variant for playlists: Play / Add / Share / Remove.
  *
  * Actions are rendered as icon-only buttons (no text labels) to keep the bar
- * compact. Share is intentionally surfaced but wired as a no-op placeholder
- * (see [onShare]); the caller is responsible for any future implementation.
- * "Remove" here removes the selected tracks *from the current playlist*
- * (not from the library), as opposed to [SelectionActionBar]'s destructive
- * "Delete".
+ * compact. "Remove" here removes the selected tracks *from the current
+ * playlist* (not from the library), as opposed to [SelectionActionBar]'s
+ * destructive "Delete", and is disabled ([removeEnabled]) for playlists the
+ * caller doesn't allow editing (e.g. computed/native playlists).
  */
 @Composable
 fun PlaylistSelectionActionBar(
@@ -107,7 +106,7 @@ fun PlaylistSelectionActionBar(
     onRemove: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
-    shareEnabled: Boolean = false,
+    removeEnabled: Boolean = true,
 ) {
     AnimatedVisibility(
         visible = selectedCount > 0,
@@ -138,25 +137,19 @@ fun PlaylistSelectionActionBar(
                 IconButton(onClick = onAdd) {
                     Icon(Icons.Rounded.PlaylistAdd, "Add to playlist", tint = MaterialTheme.colorScheme.primary)
                 }
-                IconButton(onClick = onShare, enabled = shareEnabled) {
-                    Icon(
-                        Icons.Rounded.Share,
-                        "Share",
-                        tint =
-                            if (shareEnabled) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                    alpha = 0.4f,
-                                )
-                            },
-                    )
+                IconButton(onClick = onShare) {
+                    Icon(Icons.Rounded.Share, "Share", tint = MaterialTheme.colorScheme.primary)
                 }
-                IconButton(onClick = onRemove) {
+                IconButton(onClick = onRemove, enabled = removeEnabled) {
                     Icon(
                         Icons.Rounded.RemoveCircleOutline,
                         "Remove from playlist",
-                        tint = MaterialTheme.colorScheme.error,
+                        tint =
+                            if (removeEnabled) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            },
                     )
                 }
                 IconButton(onClick = onClear) {

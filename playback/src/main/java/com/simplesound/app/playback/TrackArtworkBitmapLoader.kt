@@ -85,7 +85,7 @@ class TrackArtworkBitmapLoader(private val context: Context) : BitmapLoader {
             try {
                 retriever.setDataSource(context, Uri.parse(trackUri))
                 val bytes = retriever.embeddedPicture
-                bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+                bytes?.let { decodeDownsampled(it) }
             } catch (e: Throwable) {
                 null
             } finally {
@@ -95,9 +95,33 @@ class TrackArtworkBitmapLoader(private val context: Context) : BitmapLoader {
         return bitmap
     }
 
+    /**
+     * Embedded cover art from modern taggers can be several thousand pixels per
+     * side (tens of MB as an ARGB_8888 [Bitmap]); the lock-screen/notification
+     * widget only ever displays this at a small fixed size. Decoding bounds-only
+     * first and picking an [BitmapFactory.Options.inSampleSize] avoids allocating
+     * a full-resolution bitmap per track, which combined with [CACHE_SIZE] cached
+     * entries was a real OOM risk.
+     */
+    private fun decodeDownsampled(bytes: ByteArray): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var sampleSize = 1
+        while (bounds.outWidth / (sampleSize * 2) >= TARGET_ART_SIZE_PX &&
+            bounds.outHeight / (sampleSize * 2) >= TARGET_ART_SIZE_PX
+        ) {
+            sampleSize *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+    }
+
     companion object {
         const val KEY_TRACK_CONTENT_URI = "com.simplesound.app.TRACK_CONTENT_URI"
         private const val CACHE_SIZE = 8
+        private const val TARGET_ART_SIZE_PX = 512
         private val executor =
             Executors.newSingleThreadExecutor { r ->
                 Thread(r, "TrackArtworkBitmapLoader").apply { isDaemon = true }

@@ -45,6 +45,10 @@ class LockScreenPlayerConnection(private val context: Context) {
     /** Connects and immediately reports the current state, then again on every
      *  play/pause or track change. */
     fun connect(onState: (LockScreenPlaybackState) -> Unit) {
+        // Guards against a duplicate onStart() without an intervening onStop()/
+        // release() leaking a second MediaController connection underneath the
+        // first (mirrors the same guard in PlayerController.connect()).
+        if (controller != null) return
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener({

@@ -61,6 +61,38 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+    // ---- Playback-error recovery ----
+    // ExoPlayer does not auto-advance on error by default: a deleted file, a
+    // corrupt track, or an invalid/blank URI leaves playback stuck in an error
+    // state with no user-facing feedback and no way forward except a manual skip.
+    // This mirrors ordinary skip behavior (seekToNextMediaItem) so a single bad
+    // file doesn't stall the whole queue. errorSkipCount caps the retries at the
+    // queue size so a queue that is entirely unplayable stops instead of spinning
+    // through every item silently.
+    private var errorSkipCount = 0
+
+    private val errorRecoveryListener =
+        object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                errorSkipCount++
+                if (errorSkipCount > player.mediaItemCount) {
+                    player.stop()
+                    return
+                }
+                if (player.hasNextMediaItem()) {
+                    player.seekToNextMediaItem()
+                    player.prepare()
+                    player.play()
+                } else {
+                    player.stop()
+                }
+            }
+
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) errorSkipCount = 0
+            }
+        }
+
     private val lockScreenControlListener =
         object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) = lockScreenControl.refresh()
@@ -222,6 +254,7 @@ class PlaybackService : MediaSessionService() {
                 .build()
         player.addListener(crossfadeListener)
         player.addListener(playRecordListener)
+        player.addListener(errorRecoveryListener)
         mediaSession =
             MediaSession.Builder(this, player)
                 .setBitmapLoader(TrackArtworkBitmapLoader(this))
@@ -472,6 +505,12 @@ class PlaybackService : MediaSessionService() {
         stopCrossfadeWatcher()
         cancelActiveCrossfade()
         cancelScheduledRecordPlay()
+        // Unlike onTaskRemoved, onDestroy can run without onTaskRemoved having run
+        // first (e.g. system-initiated teardown while a sleep timer is armed). Without
+        // this, a pending sleepRunnable/sleepTicker would fire later on sleepHandler
+        // (unscoped to the service) and call fireSleepTimer() -> player.pause() on the
+        // ExoPlayer instance being released below.
+        cancelSleepTimerInternal()
         runCatching { unregisterReceiver(screenStateReceiver) }
         serviceScope.cancel()
         mediaSession?.run {

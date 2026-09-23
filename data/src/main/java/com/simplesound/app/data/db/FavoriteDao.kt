@@ -22,4 +22,8 @@ interface FavoriteDao {
 
     @Query("DELETE FROM favorite_tracks WHERE trackId IN (:ids)")
     suspend fun removeAll(ids: List<Long>)
+
+    /** Drops favorites for tracks no longer present after a library rescan. */
+    @Query("DELETE FROM favorite_tracks WHERE trackId NOT IN (:validTrackIds)")
+    suspend fun removeMissing(validTrackIds: List<Long>)
 }

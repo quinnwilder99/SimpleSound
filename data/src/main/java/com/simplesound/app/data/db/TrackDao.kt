@@ -30,9 +30,6 @@ interface TrackDao {
         insertAll(tracks)
     }
 
-    @Query("DELETE FROM tracks WHERE id = :id")
-    suspend fun deleteById(id: Long)
-
     @Query("DELETE FROM tracks WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<Long>)
 }

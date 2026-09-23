@@ -21,11 +21,12 @@ interface PlaylistTrackDao {
     @Query("DELETE FROM playlist_track_cross_ref WHERE playlistId = :playlistId")
     suspend fun deleteForPlaylist(playlistId: String)
 
-    @Query("DELETE FROM playlist_track_cross_ref WHERE trackId = :trackId")
-    suspend fun deleteByTrackId(trackId: Long)
-
     @Query("DELETE FROM playlist_track_cross_ref WHERE trackId IN (:ids)")
     suspend fun deleteByTrackIds(ids: List<Long>)
+
+    /** Drops playlist membership for tracks no longer present after a library rescan. */
+    @Query("DELETE FROM playlist_track_cross_ref WHERE trackId NOT IN (:validTrackIds)")
+    suspend fun deleteMissingTracks(validTrackIds: List<Long>)
 
     /** Overwrite one playlist's full membership + order in one go. */
     @Transaction

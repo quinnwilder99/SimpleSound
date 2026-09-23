@@ -16,4 +16,8 @@ interface PlayStatsDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: PlayStatsEntity)
+
+    /** Drops play stats for tracks no longer present after a library rescan. */
+    @Query("DELETE FROM play_stats WHERE trackId NOT IN (:validTrackIds)")
+    suspend fun removeMissing(validTrackIds: List<Long>)
 }

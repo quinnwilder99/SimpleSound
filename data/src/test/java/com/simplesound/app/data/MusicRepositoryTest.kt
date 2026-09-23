@@ -39,6 +39,7 @@ class MusicRepositoryTest {
         repository =
             MusicRepository(
                 context = context,
+                db = db,
                 trackDao = db.trackDao(),
                 playlistDao = db.playlistDao(),
                 playlistTrackDao = db.playlistTrackDao(),

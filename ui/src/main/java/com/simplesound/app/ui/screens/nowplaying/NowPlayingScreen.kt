@@ -383,6 +383,14 @@ fun NowPlayingScreen(
         DeleteTrackDialog(
             track = current,
             onConfirm = {
+                // deleteTrack() only removes the track from the library/playlists/
+                // favorites -- it has no reach into PlayerController's queue, so without
+                // this, "permanently deleted... cannot be undone" would be false from the
+                // user's perspective: playback of the just-deleted file would carry on
+                // uninterrupted. Only meaningful when it's actually the live current
+                // queue item (queueIndex >= 0); `current` can otherwise be a persisted
+                // lastPlayedTrack snapshot with nothing actively playing.
+                if (track != null && queueIndex >= 0) player.removeQueueItem(queueIndex)
                 vm.deleteTrack(current.id)
                 deleteTrack = false
                 onBack()

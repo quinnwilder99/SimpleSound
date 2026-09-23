@@ -9,7 +9,8 @@ import java.io.File
 /**
  * Reads the device's audio library from MediaStore. Requires the READ_MEDIA_AUDIO
  * (API 33+) or READ_EXTERNAL_STORAGE permission to be granted; if not granted or
- * empty, callers fall back to [SampleData].
+ * the scan throws, [MusicRepository.loadDeviceLibrary] falls back to an empty list
+ * and leaves the previously loaded library untouched.
  *
  * ---- Artwork strategy ----
  *
