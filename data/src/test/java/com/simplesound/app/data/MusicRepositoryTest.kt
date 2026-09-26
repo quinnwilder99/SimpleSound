@@ -193,6 +193,124 @@ class MusicRepositoryTest {
         assertTrue(repository.searchTracks("anything").isEmpty())
     }
 
+    // ---------- Library sync (soft-missing, remaps, large libraries) ----------
+
+    @Test
+    fun `sync of a library over the old SQLite variable limit persists and keeps references`() =
+        runTest {
+            // The previous `NOT IN (:allIds)` cleanup bound one variable per track and
+            // threw past SQLite's limit (999 on Android 8-11, 32766 after), which
+            // aborted the whole sync and left the library empty.
+            val size = 33_000
+            val library = (1L..size).map { scanned(it) }
+            repository.toggleFavoriteTrack(7L)
+            repository.syncScannedLibrary(library)
+
+            assertEquals(size, repository.tracks.value.size)
+            assertEquals(size, db.trackDao().getPresent().size)
+            assertTrue(repository.isFavorite(7L))
+            assertEquals(listOf(7L), db.favoriteDao().getAll())
+        }
+
+    @Test
+    fun `a track that vanishes keeps its favorite and playlist slot until it returns`() =
+        runTest {
+            repository.syncScannedLibrary(listOf(scanned(1), scanned(2), scanned(3)))
+            val id = repository.createPlaylist("Mix", listOf(1L, 2L, 3L))
+            repository.toggleFavoriteTrack(2L)
+
+            // e.g. SD card removed: track 2 is no longer reported by MediaStore.
+            repository.syncScannedLibrary(listOf(scanned(1), scanned(3)))
+            assertEquals(listOf(1L, 3L), repository.playlistById(id)?.trackIds)
+            assertFalse(repository.isFavorite(2L))
+            assertEquals(listOf(1L, 3L), repository.tracks.value.map { it.id }.sorted())
+
+            repository.syncScannedLibrary(listOf(scanned(1), scanned(2), scanned(3)))
+            assertEquals(listOf(1L, 2L, 3L), repository.playlistById(id)?.trackIds)
+            assertTrue(repository.isFavorite(2L))
+            repository.awaitPendingWrites()
+            assertEquals(listOf(1L, 2L, 3L), db.playlistTrackDao().getAll().sortedBy { it.position }.map { it.trackId })
+        }
+
+    @Test
+    fun `editing a playlist while a track is missing does not lose that track`() =
+        runTest {
+            repository.syncScannedLibrary(listOf(scanned(1), scanned(2), scanned(3)))
+            val id = repository.createPlaylist("Mix", listOf(1L, 2L))
+            repository.syncScannedLibrary(listOf(scanned(1), scanned(3)))
+
+            repository.addTracksToPlaylist(id, listOf(3L))
+            repository.syncScannedLibrary(listOf(scanned(1), scanned(2), scanned(3)))
+
+            assertEquals(listOf(1L, 2L, 3L), repository.playlistById(id)?.trackIds)
+        }
+
+    @Test
+    fun `a re-indexed file keeps its favorites, playlists and stats under the new id`() =
+        runTest {
+            repository.syncScannedLibrary(listOf(scanned(5, "/storage/emulated/0/Music/a.mp3")))
+            val id = repository.createPlaylist("Mix", listOf(5L))
+            repository.toggleFavoriteTrack(5L)
+            repository.recordTrackPlayed(5L)
+
+            repository.syncScannedLibrary(listOf(scanned(9, "/storage/emulated/0/Music/a.mp3")))
+
+            assertEquals(listOf(9L), repository.playlistById(id)?.trackIds)
+            assertTrue(repository.isFavorite(9L))
+            assertEquals(1, repository.trackById(9L)?.playCount)
+            repository.awaitPendingWrites()
+            assertEquals(listOf(9L), db.favoriteDao().getAll())
+            assertEquals(listOf(9L), db.playStatsDao().getAll().map { it.trackId })
+            assertEquals(listOf(9L), db.playlistTrackDao().getAll().map { it.trackId })
+        }
+
+    @Test
+    fun `deleteTracks removes more ids than one SQLite statement can bind`() =
+        runTest {
+            val ids = (1L..1_500L).toList()
+            repository.syncScannedLibrary(ids.map { scanned(it) })
+            repository.deleteTracks(ids)
+            repository.awaitPendingWrites()
+            assertTrue(repository.tracks.value.isEmpty())
+            assertTrue(db.trackDao().getAll().isEmpty())
+        }
+
+    // ---------- Write ordering / thread safety ----------
+
+    @Test
+    fun `rapid favorite toggles reach room in order`() =
+        runTest {
+            repeat(101) { repository.toggleFavoriteTrack(3L) } // odd count -> ends favorited
+            repository.awaitPendingWrites()
+            assertTrue(repository.isFavorite(3L))
+            assertEquals(listOf(3L), db.favoriteDao().getAll())
+        }
+
+    @Test
+    fun `concurrent play recording loses no plays`() =
+        runTest {
+            repository.syncScannedLibrary(listOf(scanned(1)))
+            val threads = List(8) { Thread { repeat(50) { repository.recordTrackPlayed(1L) } } }
+            threads.forEach { it.start() }
+            threads.forEach { it.join() }
+            repository.awaitPendingWrites()
+            assertEquals(400, repository.trackById(1L)?.playCount)
+            assertEquals(400, db.playStatsDao().getAll().single().playCount)
+        }
+
+    private fun scanned(
+        id: Long,
+        path: String = "/storage/emulated/0/Music/$id.mp3",
+    ) = com.simplesound.app.data.model.Track(
+        id = id,
+        title = "Track $id",
+        artist = "",
+        album = "",
+        durationMs = 1_000L,
+        uri = "content://media/external/audio/media/$id",
+        path = path,
+    )
+
     private fun track(
         id: Long,
         title: String,

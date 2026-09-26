@@ -3,17 +3,16 @@ package com.simplesound.app.playback
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
+import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.model.Track
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,83 +22,42 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Thin bridge between Compose and the [PlaybackService]'s MediaController. Exposes
- * the currently playing track and play/pause state as observable flows, and simple
- * transport controls. A Hilt-provided singleton, connected in `MainActivity.onStart`
- * and released in `onStop`.
+ * Thin bridge between Compose and the [PlaybackService]'s MediaController. A
+ * Hilt-provided singleton, connected in `MainActivity.onStart` and released in `onStop`.
+ *
+ * The service's player is the single source of truth: the queue, current track,
+ * shuffle order and resume point all live there, and [PlaybackService] persists and
+ * restores them itself (it keeps playing -- and advancing -- while this controller is
+ * disconnected). The flows here just mirror the session:
+ * - [queue] is always the player's items in playlist order; [playOrder] gives the
+ *   order they will actually play in (differs when shuffle is on).
+ * - Before the controller has connected, [lastPlayedTrack]/position/duration are
+ *   seeded from the persisted snapshot so the mini player renders instantly.
+ * - Commands issued before the connection completes (e.g. a tap in the first
+ *   moments after launch) are queued and run once connected, instead of being
+ *   silently dropped.
  *
  * The sleep timer state ([sleepTimerActive] / [sleepTimerRemainingMs]) is owned by
- * [PlaybackService] so the countdown keeps running while the app is backgrounded
- * (this controller is torn down in onStop). Set/cancel requests are forwarded to
- * the service via Intent.
+ * [PlaybackService] so the countdown keeps running while the app is backgrounded.
  */
 @Singleton
 class PlayerController
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
+        private val repository: MusicRepository,
     ) {
         private var controller: MediaController? = null
-        private val trackIndex = mutableMapOf<String, Track>()
-
-        /**
-         * Set by [restoreQueue] when it runs before [connect] has produced a
-         * [MediaController] (the normal case: [MainActivity] restores state in
-         * onCreate, before onStart calls [connect]). [prepareRestoredQueue] silently
-         * no-ops without a controller, so without this the queue would never
-         * actually be loaded into the real player -- cleared once it succeeds.
-         */
-        private data class PendingQueueRestore(
-            val tracks: List<Track>,
-            val startIndex: Int,
-            val positionMs: Long,
-        )
-
-        private var pendingQueueRestore: PendingQueueRestore? = null
-
-        /**
-         * Set by [restorePlaybackModes] when it runs before [connect] has produced a
-         * [MediaController] (the normal case: [MainActivity] restores state in
-         * onCreate, before onStart calls [connect]). Applied to the real controller
-         * once it's available -- cleared once it succeeds. Without this, a restored
-         * shuffle/repeat preference would only ever update the [_isShuffleOn]/
-         * [_repeatMode] flows and never actually reach the underlying [Player], so
-         * shuffle/repeat would keep resetting to off whenever the OS killed the
-         * process (see saveShuffleEnabled/saveRepeatMode in MusicRepository).
-         */
-        private var pendingShuffleEnabled: Boolean? = null
-        private var pendingRepeatMode: Int? = null
-
-        /**
-         * Builds the [MediaItem] fed to the [MediaController]/[MediaSession]. The track's
-         * own content URI is stashed in [MediaMetadata.extras] so [TrackArtworkBitmapLoader]
-         * can decode its *embedded* per-track picture for the lock-screen/notification
-         * widget; [Track.albumArtUri] is passed as [MediaMetadata.artworkUri] only as the
-         * album-level fallback when no embedded picture exists (see MediaStoreScanner's
-         * "Artwork strategy" doc comment and ui/Artwork.kt, which follow the same order).
-         */
-        private fun buildMediaItem(track: Track): MediaItem {
-            val extras =
-                Bundle().apply {
-                    putString(TrackArtworkBitmapLoader.KEY_TRACK_CONTENT_URI, track.uri)
-                }
-            return MediaItem.Builder()
-                .setMediaId(track.id.toString())
-                .setUri(track.uri.ifBlank { Uri.EMPTY.toString() })
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(track.title)
-                        .setArtist(track.artistOrUnknown)
-                        .setAlbumTitle(track.albumOrUnknown)
-                        .setExtras(extras)
-                        .apply { track.albumArtUri?.let { setArtworkUri(Uri.parse(it)) } }
-                        .build(),
-                )
-                .build()
-        }
+        private var controllerFuture: ListenableFuture<MediaController>? = null
+        private val pendingActions = ArrayDeque<(MediaController) -> Unit>()
 
         private val _queue = MutableStateFlow<List<Track>>(emptyList())
         val queue: StateFlow<List<Track>> = _queue.asStateFlow()
+
+        private val _playOrder = MutableStateFlow<List<Int>>(emptyList())
+
+        /** [queue] indices in the order they will play; identical to 0..n-1 unless shuffle is on. */
+        val playOrder: StateFlow<List<Int>> = _playOrder.asStateFlow()
 
         private val _queueTitle = MutableStateFlow("")
         val queueTitle: StateFlow<String> = _queueTitle.asStateFlow()
@@ -112,70 +70,6 @@ class PlayerController
 
         private val _lastPlayedTrack = MutableStateFlow<Track?>(null)
         val lastPlayedTrack: StateFlow<Track?> = _lastPlayedTrack.asStateFlow()
-
-        fun restoreLastPlayedTrack(
-            track: Track?,
-            positionMs: Long = 0L,
-            autoPrepareAndPause: Boolean = true,
-        ) {
-            if (track == null) return
-            if (_lastPlayedTrack.value == null) _lastPlayedTrack.value = track
-            if (_currentTrack.value == null) {
-                _currentTrack.value = track
-                trackIndex[track.id.toString()] = track
-            }
-            if (positionMs > 0) _positionMs.value = positionMs
-            if (track.durationMs > 0) _durationMs.value = track.durationMs
-            if (autoPrepareAndPause) prepareRestoredTrack(track, positionMs)
-        }
-
-        fun restoreQueue(
-            tracks: List<Track>,
-            startIndex: Int,
-            sourceTitle: String,
-            positionMs: Long = 0L,
-        ) {
-            if (tracks.isEmpty()) return
-            val safeIndex = startIndex.coerceIn(0, tracks.lastIndex)
-            trackIndex.clear()
-            tracks.forEach { trackIndex[it.id.toString()] = it }
-            _queue.value = tracks
-            _queueTitle.value = sourceTitle
-            _queueIndex.value = safeIndex
-            _currentTrack.value = tracks[safeIndex]
-            _lastPlayedTrack.value = tracks[safeIndex]
-            if (positionMs > 0) _positionMs.value = positionMs
-            val dur = tracks[safeIndex].durationMs
-            if (dur > 0) _durationMs.value = dur
-            pendingQueueRestore = PendingQueueRestore(tracks, safeIndex, positionMs)
-            prepareRestoredQueue(tracks, safeIndex, positionMs)
-        }
-
-        private fun prepareRestoredTrack(
-            track: Track,
-            positionMs: Long,
-        ) {
-            val c = controller ?: return
-            if (c.mediaItemCount > 0) return
-            trackIndex[track.id.toString()] = track
-            val item = buildMediaItem(track)
-            c.setMediaItem(item, positionMs.coerceAtLeast(0L))
-            c.prepare()
-            c.playWhenReady = false
-        }
-
-        private fun prepareRestoredQueue(
-            tracks: List<Track>,
-            startIndex: Int,
-            positionMs: Long,
-        ) {
-            val c = controller ?: return
-            val items = tracks.map { track -> buildMediaItem(track) }
-            c.setMediaItems(items, startIndex, positionMs.coerceAtLeast(0L))
-            c.prepare()
-            c.playWhenReady = false
-            pendingQueueRestore = null
-        }
 
         private val _isPlaying = MutableStateFlow(false)
         val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -198,11 +92,23 @@ class PlayerController
         private val _isShuffleOn = MutableStateFlow(false)
         val isShuffleOn: StateFlow<Boolean> = _isShuffleOn.asStateFlow()
 
+        /** 0 = off, 1 = repeat all, 2 = repeat one. */
         private val _repeatMode = MutableStateFlow(0)
         val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
 
-        private val mainHandler = Handler(Looper.getMainLooper())
+        private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
         private var progressRunnable: Runnable? = null
+
+        init {
+            // Instant mini player on launch, before the session connects / restores.
+            repository.lastPlayedTrack()?.let { snapshot ->
+                _lastPlayedTrack.value = snapshot
+                _durationMs.value = snapshot.durationMs.coerceAtLeast(0L)
+                _positionMs.value = repository.lastPlayedPosition()
+            }
+            _isShuffleOn.value = repository.lastShuffleEnabled()
+            _repeatMode.value = repository.lastRepeatMode()
+        }
 
         private val listener =
             object : Player.Listener {
@@ -215,73 +121,59 @@ class PlayerController
                     mediaItem: MediaItem?,
                     reason: Int,
                 ) {
-                    syncCurrentItem()
+                    controller?.let { syncCurrentItem(it) }
+                }
+
+                override fun onTimelineChanged(
+                    timeline: Timeline,
+                    reason: Int,
+                ) {
+                    controller?.let { syncQueue(it) }
+                }
+
+                override fun onPlaylistMetadataChanged(mediaMetadata: MediaMetadata) {
+                    _queueTitle.value = mediaMetadata.title?.toString().orEmpty()
                 }
 
                 override fun onPlaybackStateChanged(state: Int) {
                     if (state == Player.STATE_READY || state == Player.STATE_ENDED) {
-                        _durationMs.value = controller?.duration?.takeIf { it > 0 } ?: 0L
+                        controller?.duration?.takeIf { it > 0 }?.let { _durationMs.value = it }
                     }
                 }
 
                 override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                     _isShuffleOn.value = shuffleModeEnabled
+                    controller?.let { _playOrder.value = it.playOrder() }
                 }
 
                 override fun onRepeatModeChanged(repeatMode: Int) {
                     _repeatMode.value = repeatModeToApp(repeatMode)
                 }
+
+                override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+                    _playbackSpeed.value = playbackParameters.speed
+                }
             }
 
         fun connect() {
-            if (controller != null) return
+            if (controller != null || controllerFuture != null) return
             val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
             val future = MediaController.Builder(context, token).buildAsync()
+            controllerFuture = future
             future.addListener({
+                // A release() in the meantime cancels/replaces the future; don't adopt it.
+                if (controllerFuture !== future) return@addListener
                 val c = runCatching { future.get() }.getOrNull() ?: return@addListener
-                controller = c.also { it.addListener(listener) }
-                // Apply a pending restore (requested before this controller existed)
-                // to the real player first, so the flows below then read back
-                // whatever the player actually ends up holding -- either the just-applied
-                // restored preference, or (if nothing was pending) the ongoing session's
-                // own live state, e.g. when the service process survived and this is
-                // just a fresh Activity/MediaController reconnecting to it.
-                pendingShuffleEnabled?.let { c.shuffleModeEnabled = it }
-                pendingShuffleEnabled = null
-                pendingRepeatMode?.let { c.repeatMode = appRepeatModeToPlayer(it) }
-                pendingRepeatMode = null
+                controller = c
+                c.addListener(listener)
                 _isShuffleOn.value = c.shuffleModeEnabled
                 _repeatMode.value = repeatModeToApp(c.repeatMode)
-                // Only overwrite the duration from the (possibly still-empty) real
-                // controller when it actually has one -- a restoreQueue()/
-                // restoreLastPlayedTrack() call earlier in onCreate (before this
-                // future resolved) may have already primed it from persisted data,
-                // and a fresh controller reports 0 until media is loaded below.
-                controller?.duration?.takeIf { it > 0 }?.let { _durationMs.value = it }
-                // Prefer finishing a queue restore that couldn't run earlier because
-                // the controller wasn't ready yet. Otherwise, if the session already
-                // holds real media, it means the service kept running (and could have
-                // auto-advanced through several tracks, e.g. in response to lock-screen
-                // controls) while this Activity was stopped and released its previous
-                // controller in onStop() -- resync every flow from the session's actual
-                // live state now rather than leaving them frozen at whatever they were
-                // the moment we disconnected. Without this, reopening the app after
-                // playback moved on in the background shows (and then persists, via the
-                // lastPlayedTrack/queue collectors in MainActivity) the track that was
-                // playing when the app was backgrounded, not the one actually playing
-                // now -- and every other transport control looks broken relative to a
-                // display that never caught up. Fall back to the single-track restore
-                // path only when the controller is genuinely empty.
-                val pendingQueue = pendingQueueRestore
-                when {
-                    pendingQueue != null ->
-                        prepareRestoredQueue(pendingQueue.tracks, pendingQueue.startIndex, pendingQueue.positionMs)
-                    c.mediaItemCount > 0 -> {
-                        syncCurrentItem()
-                        _isPlaying.value = c.isPlaying
-                    }
-                    else -> maybePrepareRestoredTrack()
-                }
+                _isPlaying.value = c.isPlaying
+                _playbackSpeed.value = c.playbackParameters.speed
+                // The session may have moved on (or been restored by the service) while
+                // we were disconnected; mirror whatever it holds now.
+                syncQueue(c)
+                while (pendingActions.isNotEmpty()) pendingActions.removeFirst().invoke(c)
                 updateProgressPolling()
             }, ContextCompat.getMainExecutor(context))
         }
@@ -289,9 +181,17 @@ class PlayerController
         fun release() {
             progressRunnable?.let { mainHandler.removeCallbacks(it) }
             progressRunnable = null
+            pendingActions.clear()
             controller?.removeListener(listener)
-            controller?.release()
+            controllerFuture?.let { MediaController.releaseFuture(it) }
+            controllerFuture = null
             controller = null
+        }
+
+        /** Runs [action] now if connected, otherwise as soon as the connection completes. */
+        private fun withController(action: (MediaController) -> Unit) {
+            val c = controller
+            if (c != null) action(c) else pendingActions.addLast(action)
         }
 
         fun playQueue(
@@ -299,23 +199,24 @@ class PlayerController
             startIndex: Int = 0,
             sourceTitle: String = "",
         ) {
-            val c = controller ?: return
             if (tracks.isEmpty()) return
-            trackIndex.clear()
-            val items =
-                tracks.map { track ->
-                    trackIndex[track.id.toString()] = track
-                    buildMediaItem(track)
-                }
-            val safeIndex = startIndex.coerceIn(0, items.lastIndex)
-            c.setMediaItems(items, safeIndex, 0L)
-            c.prepare()
-            c.play()
+            val safeIndex = startIndex.coerceIn(0, tracks.lastIndex)
+            // Optimistic UI update; syncQueue() confirms it from the session.
             _queue.value = tracks
+            _playOrder.value = tracks.indices.toList()
             _queueTitle.value = sourceTitle
             _queueIndex.value = safeIndex
             _currentTrack.value = tracks[safeIndex]
             _lastPlayedTrack.value = tracks[safeIndex]
+            _positionMs.value = 0L
+            _durationMs.value = tracks[safeIndex].durationMs.coerceAtLeast(0L)
+            val items = tracks.map { it.toMediaItem() }
+            withController { c ->
+                c.playlistMetadata = MediaMetadata.Builder().setTitle(sourceTitle).build()
+                c.setMediaItems(items, safeIndex, 0L)
+                c.prepare()
+                c.play()
+            }
         }
 
         fun playSingle(track: Track) = playQueue(listOf(track), 0, "Queue")
@@ -330,145 +231,100 @@ class PlayerController
          * the "..." menu wiring in NowPlayingScreen.
          */
         fun restartCurrentTrack() {
-            val c = controller ?: return
-            if (c.mediaItemCount == 0) return
-            c.seekTo(0L)
             _positionMs.value = 0L
-            c.play()
-        }
-
-        fun togglePlayPause() {
-            val c = controller ?: return
-            if (c.mediaItemCount == 0) {
-                maybePrepareRestoredTrack()
+            withController { c ->
+                if (c.mediaItemCount == 0) return@withController
+                c.seekTo(0L)
                 c.play()
-                return
             }
-            if (c.isPlaying) c.pause() else c.play()
         }
 
-        fun next() {
-            controller?.seekToNextMediaItem()
-        }
+        /**
+         * With an empty player (the service is still restoring the saved queue),
+         * play() just sets playWhenReady; the restore keeps it, so playback starts
+         * the moment the queue lands.
+         */
+        fun togglePlayPause() =
+            withController { c ->
+                if (c.isPlaying) c.pause() else c.play()
+            }
 
-        fun previous() {
-            controller?.seekToPreviousMediaItem()
-        }
+        fun next() = withController { it.seekToNextMediaItem() }
+
+        fun previous() = withController { it.seekToPreviousMediaItem() }
 
         fun stop() {
-            val c = controller ?: return
             _currentTrack.value = null
             _queueIndex.value = -1
-            c.stop()
+            withController { it.stop() }
         }
 
+        /** [index] is a [queue] (playlist-order) index. */
         fun playQueueItemAt(index: Int) {
-            val c = controller ?: return
             val q = _queue.value
             if (index !in q.indices) return
-            c.seekToDefaultPosition(index)
             _queueIndex.value = index
             _currentTrack.value = q[index]
-            c.play()
+            withController { c ->
+                c.seekToDefaultPosition(index)
+                c.play()
+            }
         }
 
         fun moveQueueItem(
             from: Int,
             to: Int,
         ) {
-            val c = controller
             val q = _queue.value.toMutableList()
             if (from !in q.indices || to !in q.indices) return
-            val item = q.removeAt(from)
-            q.add(to, item)
+            q.add(to, q.removeAt(from))
             _queue.value = q
             // Player.moveMediaItem reorders in place without rebuilding the timeline,
-            // unlike the previous setMediaItems(...) approach, which rebuilt every
-            // MediaItem and forced ExoPlayer to re-prepare/rebuffer the currently
-            // playing item even when the drag only touched unrelated tracks. Track
-            // identity/order doesn't change what trackIndex maps id -> Track, so it
-            // doesn't need to be touched here.
-            if (c != null) {
-                c.moveMediaItem(from, to)
-                _queueIndex.value = c.currentMediaItemIndex
-            }
+            // so the currently playing item isn't re-prepared/rebuffered.
+            withController { it.moveMediaItem(from, to) }
         }
 
         fun removeQueueItem(index: Int) {
-            val c = controller
-            val q = _queue.value.toMutableList()
+            val q = _queue.value
             if (index !in q.indices) return
-            val removed = q.removeAt(index)
-            _queue.value = q
-            trackIndex.remove(removed.id.toString())
-            if (c != null) {
+            _queue.value = q.toMutableList().apply { removeAt(index) }
+            withController { c ->
                 c.removeMediaItem(index)
-                if (q.isEmpty()) {
-                    _queueIndex.value = -1
-                    _currentTrack.value = null
-                    c.stop()
-                } else {
-                    _queueIndex.value = c.currentMediaItemIndex
-                    val mid = c.currentMediaItem?.mediaId
-                    _currentTrack.value = if (mid != null) trackIndex[mid] else _currentTrack.value
+                if (c.mediaItemCount == 0) c.stop()
+            }
+        }
+
+        /** Drops every queue entry for [trackIds] (used after those tracks were deleted). */
+        fun removeTracksFromQueue(trackIds: Set<Long>) {
+            if (trackIds.isEmpty()) return
+            _queue.value = _queue.value.filterNot { it.id in trackIds }
+            if (_currentTrack.value?.id in trackIds) _currentTrack.value = null
+            if (_lastPlayedTrack.value?.id in trackIds) _lastPlayedTrack.value = null
+            if (repository.lastPlayedTrackId() in trackIds) repository.saveLastPlayedTrack(null)
+            withController { c ->
+                for (i in c.mediaItemCount - 1 downTo 0) {
+                    if (c.getMediaItemAt(i).mediaId.toLongOrNull() in trackIds) c.removeMediaItem(i)
                 }
+                if (c.mediaItemCount == 0) c.stop()
             }
         }
 
         fun seekTo(positionMs: Long) {
-            controller?.seekTo(positionMs.coerceAtLeast(0))
-            _positionMs.value = positionMs.coerceAtLeast(0)
+            val pos = positionMs.coerceAtLeast(0)
+            _positionMs.value = pos
+            withController { it.seekTo(pos) }
         }
 
-        fun toggleShuffle() {
-            val c = controller ?: return
-            c.shuffleModeEnabled = !c.shuffleModeEnabled
-        }
+        fun toggleShuffle() = withController { it.shuffleModeEnabled = !it.shuffleModeEnabled }
 
-        fun cycleRepeatMode() {
-            val c = controller ?: return
-            c.repeatMode =
-                when (c.repeatMode) {
-                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                    Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                    else -> Player.REPEAT_MODE_OFF
-                }
-        }
-
-        /**
-         * Re-applies a previously persisted shuffle/repeat preference. [repeatMode] uses
-         * the app's own encoding (0 = off, 1 = repeat all, 2 = repeat one -- same as
-         * [repeatMode]'s flow), not [Player]'s constants. Called from `MainActivity.onCreate`
-         * alongside [restoreQueue]/[restoreLastPlayedTrack], since shuffle/repeat are just
-         * as ephemeral as those otherwise -- see [MutableStateFlow] docs above and
-         * MusicRepository.saveShuffleEnabled/saveRepeatMode.
-         *
-         * Updates the flows immediately (so the UI reflects the restored state right
-         * away, same as the queue/track restores) and either applies it to the live
-         * controller now, or stashes it in [pendingShuffleEnabled]/[pendingRepeatMode]
-         * for [connect] to apply once the controller exists.
-         */
-        fun restorePlaybackModes(
-            shuffleEnabled: Boolean,
-            repeatMode: Int,
-        ) {
-            _isShuffleOn.value = shuffleEnabled
-            _repeatMode.value = repeatMode
-            val c = controller
-            if (c != null) {
-                c.shuffleModeEnabled = shuffleEnabled
-                c.repeatMode = appRepeatModeToPlayer(repeatMode)
-            } else {
-                pendingShuffleEnabled = shuffleEnabled
-                pendingRepeatMode = repeatMode
-            }
-        }
-
-        private fun appRepeatModeToPlayer(mode: Int): Int =
-            when (mode) {
-                2 -> Player.REPEAT_MODE_ONE
-                1 -> Player.REPEAT_MODE_ALL
-                else -> Player.REPEAT_MODE_OFF
+        fun cycleRepeatMode() =
+            withController { c ->
+                c.repeatMode =
+                    when (c.repeatMode) {
+                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                        else -> Player.REPEAT_MODE_OFF
+                    }
             }
 
         private fun repeatModeToApp(mode: Int): Int =
@@ -481,7 +337,7 @@ class PlayerController
         fun setSpeed(speed: Float) {
             val s = speed.coerceIn(0.1f, 2.0f)
             _playbackSpeed.value = s
-            controller?.playbackParameters = PlaybackParameters(s, 1.0f)
+            withController { it.playbackParameters = PlaybackParameters(s, 1.0f) }
         }
 
         /**
@@ -506,70 +362,63 @@ class PlayerController
 
         private fun updateProgressPolling() {
             progressRunnable?.let { mainHandler.removeCallbacks(it) }
-            if (_isPlaying.value) {
-                val r =
-                    object : Runnable {
-                        override fun run() {
-                            val c = controller ?: return
-                            _positionMs.value = c.currentPosition.coerceAtLeast(0)
-                            val d = c.duration
-                            if (d > 0) _durationMs.value = d
-                            // Belt-and-suspenders: if a track transition (e.g. an automatic
-                            // end-of-track advance) somehow left the displayed track out of
-                            // sync with the player, self-heal within one tick instead of
-                            // staying stuck on the old title.
-                            val id = c.currentMediaItem?.mediaId
-                            if (id != null && _currentTrack.value?.id?.toString() != id) {
-                                trackIndex[id]?.let { resolved ->
-                                    _currentTrack.value = resolved
-                                    _lastPlayedTrack.value = resolved
-                                    _queueIndex.value = c.currentMediaItemIndex
-                                }
-                            }
-                            mainHandler.postDelayed(this, 500L)
-                        }
+            progressRunnable = null
+            if (!_isPlaying.value) return
+            val r =
+                object : Runnable {
+                    override fun run() {
+                        val c = controller ?: return
+                        _positionMs.value = c.currentPosition.coerceAtLeast(0)
+                        c.duration.takeIf { it > 0 }?.let { _durationMs.value = it }
+                        mainHandler.postDelayed(this, 500L)
                     }
-                progressRunnable = r
-                mainHandler.post(r)
+                }
+            progressRunnable = r
+            mainHandler.post(r)
+        }
+
+        private fun resolve(item: MediaItem): Track? =
+            item.mediaId.toLongOrNull()?.let { repository.trackById(it) } ?: item.toSnapshotTrack()
+
+        /** Mirrors the session's whole playlist, title and play order, then the current item. */
+        private fun syncQueue(c: MediaController) {
+            val count = c.mediaItemCount
+            if (count == 0) {
+                // Empty either because the service is still restoring (keep showing the
+                // persisted snapshot) or because the queue was genuinely cleared.
+                _queue.value = emptyList()
+                _playOrder.value = emptyList()
+                _queueIndex.value = -1
+                _currentTrack.value = null
+                return
             }
+            _queue.value =
+                (0 until count).map { i ->
+                    val item = c.getMediaItemAt(i)
+                    resolve(item) ?: Track(id = -1L - i, title = "", artist = "", album = "", durationMs = 0L, uri = "")
+                }
+            _playOrder.value = c.playOrder()
+            _queueTitle.value = c.playlistMetadata.title?.toString().orEmpty()
+            syncCurrentItem(c)
         }
 
         /**
          * Reconcile the displayed track, queue index, and timeline from the live
-         * [controller] state. Reads directly from the controller rather than trusting
-         * a listener callback's own parameters (e.g. [Player.Listener.onMediaItemTransition]'s
-         * `mediaItem` argument), since those can be null or lag behind on an automatic
-         * end-of-track advance — which previously left the timeline reset to 00:00
-         * while the title/artist stayed on the just-finished track.
+         * controller state. Reads directly from the controller rather than trusting a
+         * listener callback's own parameters, since those can lag behind on an
+         * automatic end-of-track advance.
          */
-        private fun syncCurrentItem() {
-            val c = controller ?: return
-            val id = c.currentMediaItem?.mediaId
-            val resolved = id?.let { trackIndex[it] }
+        private fun syncCurrentItem(c: MediaController) {
+            val item = c.currentMediaItem ?: return
+            val index = c.currentMediaItemIndex
+            val resolved = _queue.value.getOrNull(index)?.takeIf { it.id.toString() == item.mediaId } ?: resolve(item)
             if (resolved != null) {
                 _currentTrack.value = resolved
                 _lastPlayedTrack.value = resolved
             }
-            _queueIndex.value = c.currentMediaItemIndex
+            _queueIndex.value = index
             _positionMs.value = c.currentPosition.coerceAtLeast(0)
-            _durationMs.value = c.duration.takeIf { it > 0 } ?: 0L
-        }
-
-        private fun maybePrepareRestoredTrack() {
-            val track = _lastPlayedTrack.value ?: return
-            val c = controller ?: return
-            // Note: _currentTrack.value is deliberately NOT checked here. restoreQueue()/
-            // restoreLastPlayedTrack() always set it synchronously (so the UI has
-            // something to show immediately), including when they run in onCreate
-            // before connect() has produced a controller -- at that point
-            // prepareRestoredTrack() silently no-ops for lack of one. Gating on
-            // _currentTrack.value here would then make this a permanent no-op too,
-            // leaving the real player with zero media items forever (play button
-            // does nothing, position/duration stuck at 0). mediaItemCount is the
-            // correct guard: it reflects the real controller, not just the flow.
-            if (c.mediaItemCount > 0) return
-            val pos = _positionMs.value.takeIf { it >= 0L } ?: -1L
-            prepareRestoredTrack(track, pos)
+            _durationMs.value = c.duration.takeIf { it > 0 } ?: resolved?.durationMs ?: 0L
         }
 
         companion object {

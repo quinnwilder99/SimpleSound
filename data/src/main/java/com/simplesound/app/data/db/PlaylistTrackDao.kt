@@ -21,12 +21,13 @@ interface PlaylistTrackDao {
     @Query("DELETE FROM playlist_track_cross_ref WHERE playlistId = :playlistId")
     suspend fun deleteForPlaylist(playlistId: String)
 
+    /** Callers must keep [ids] under SQLite's bound-variable limit (see MusicRepository.IN_CHUNK). */
     @Query("DELETE FROM playlist_track_cross_ref WHERE trackId IN (:ids)")
     suspend fun deleteByTrackIds(ids: List<Long>)
 
-    /** Drops playlist membership for tracks no longer present after a library rescan. */
-    @Query("DELETE FROM playlist_track_cross_ref WHERE trackId NOT IN (:validTrackIds)")
-    suspend fun deleteMissingTracks(validTrackIds: List<Long>)
+    /** Drops membership rows whose track is no longer known at all — see [FavoriteDao.purgeOrphans]. */
+    @Query("DELETE FROM playlist_track_cross_ref WHERE trackId NOT IN (SELECT id FROM tracks)")
+    suspend fun purgeOrphans()
 
     /** Overwrite one playlist's full membership + order in one go. */
     @Transaction

@@ -4,7 +4,6 @@ import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
 import com.simplesound.app.data.model.Track
-import java.io.File
 
 /**
  * Reads the device's audio library from MediaStore. Requires the READ_MEDIA_AUDIO
@@ -60,7 +59,7 @@ object MediaStoreScanner {
             while (c.moveToNext()) {
                 val id = c.getLong(idCol)
                 val path = c.getString(dataCol) ?: ""
-                val folder = File(path).parentFile?.name ?: ""
+                val folder = folderOf(path)
                 val contentUri = ContentUris.withAppendedId(collection, id).toString()
                 val albumId = c.getLong(albumIdCol)
                 // Album-level fallback only. Embedded (per-track) art is read
@@ -82,9 +81,25 @@ object MediaStoreScanner {
                         albumArtUri = albumArtUri,
                         folder = folder,
                         dateAddedSec = c.getLong(dateCol),
+                        path = path,
                     )
             }
         }
         return result
+    }
+
+    private val VOLUME_ROOT = Regex("""^/storage/(emulated/\d+|[^/]+)/""")
+
+    /**
+     * The track's parent directory relative to its storage volume, e.g.
+     * `/storage/emulated/0/Music/Rap/a.mp3` -> `Music/Rap`. The full relative path
+     * (not just the last segment) keeps two different `.../Music` folders from being
+     * merged into one entry on the Folders tab.
+     */
+    internal fun folderOf(path: String): String {
+        // Plain string ops rather than java.io.File so this behaves the same in JVM
+        // unit tests on a Windows host (File would use '\' separators there).
+        val parent = path.substringBeforeLast('/', missingDelimiterValue = "")
+        return "$parent/".replaceFirst(VOLUME_ROOT, "").trimEnd('/')
     }
 }

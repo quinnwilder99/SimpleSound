@@ -71,10 +71,10 @@ import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.Artwork
-import com.simplesound.app.ui.components.DeleteTrackDialog
 import com.simplesound.app.ui.components.QueueSheet
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
+import com.simplesound.app.ui.components.rememberTrackDeleter
 import com.simplesound.app.util.formatDuration
 import com.simplesound.app.util.shareTrack
 
@@ -107,12 +107,14 @@ fun NowPlayingScreen(
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showActionsSheet by remember { mutableStateOf(false) }
-    var deleteTrack by remember { mutableStateOf(false) }
+    // The deleter also drops the track from the live queue; leave Now Playing afterwards.
+    val deleter = rememberTrackDeleter(vm, onDeleted = { onBack() })
     var detailsTrack by remember { mutableStateOf(false) }
     var showSpeedSheet by remember { mutableStateOf(false) }
     var seekingValue by remember { mutableStateOf<Float?>(null) }
     // ---- Temp queue (Now Playing queue sheet) ----
     val queue by player.queue.collectAsStateWithLifecycle()
+    val playOrder by player.playOrder.collectAsStateWithLifecycle()
     val queueIndex by player.queueIndex.collectAsStateWithLifecycle()
     val queueTitle by player.queueTitle.collectAsStateWithLifecycle()
     var showQueueSheet by remember { mutableStateOf(false) }
@@ -369,7 +371,7 @@ fun NowPlayingScreen(
             },
             onDelete = {
                 showActionsSheet = false
-                deleteTrack = true
+                deleter.request(listOf(current))
             },
             onShare = { shareTrack(context, current) },
             onDetails = {
@@ -377,25 +379,6 @@ fun NowPlayingScreen(
                 detailsTrack = true
             },
             onDismiss = { showActionsSheet = false },
-        )
-    }
-    if (deleteTrack && current != null) {
-        DeleteTrackDialog(
-            track = current,
-            onConfirm = {
-                // deleteTrack() only removes the track from the library/playlists/
-                // favorites -- it has no reach into PlayerController's queue, so without
-                // this, "permanently deleted... cannot be undone" would be false from the
-                // user's perspective: playback of the just-deleted file would carry on
-                // uninterrupted. Only meaningful when it's actually the live current
-                // queue item (queueIndex >= 0); `current` can otherwise be a persisted
-                // lastPlayedTrack snapshot with nothing actively playing.
-                if (track != null && queueIndex >= 0) player.removeQueueItem(queueIndex)
-                vm.deleteTrack(current.id)
-                deleteTrack = false
-                onBack()
-            },
-            onDismiss = { deleteTrack = false },
         )
     }
     if (detailsTrack && current != null) {
@@ -411,6 +394,7 @@ fun NowPlayingScreen(
     if (showQueueSheet) {
         QueueSheet(
             queue = queue,
+            playOrder = playOrder,
             currentIndex = queueIndex,
             queueTitle = queueTitle,
             onPlay = { index -> player.playQueueItemAt(index) },

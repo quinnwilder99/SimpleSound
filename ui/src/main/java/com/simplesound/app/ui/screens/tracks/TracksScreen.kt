@@ -23,13 +23,12 @@ import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
-import com.simplesound.app.ui.components.DeleteTrackDialog
-import com.simplesound.app.ui.components.DeleteTracksDialog
 import com.simplesound.app.ui.components.SelectionActionBar
 import com.simplesound.app.ui.components.SortHeader
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
+import com.simplesound.app.ui.components.rememberTrackDeleter
 import com.simplesound.app.util.shareTrack
 
 /** Sort options offered for the flat Tracks list, i.e. everything except
@@ -55,14 +54,12 @@ fun TracksScreen(
     // ---- Single-track actions ----
     var sheetTrack by remember { mutableStateOf<Track?>(null) }
     var addTrack by remember { mutableStateOf<Track?>(null) }
-    var deleteTrack by remember { mutableStateOf<Track?>(null) }
     var detailsTrack by remember { mutableStateOf<Track?>(null) }
 
     // ---- Multi-selection state ----
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     val selectionMode = selectedIds.isNotEmpty()
     var showAddMany by remember { mutableStateOf(false) }
-    var showDeleteMany by remember { mutableStateOf(false) }
 
     val selectedTracks: List<Track> =
         remember(selectedIds, sorted) {
@@ -78,6 +75,8 @@ fun TracksScreen(
         selectedIds = emptySet()
     }
 
+    val deleter = rememberTrackDeleter(vm, onDeleted = { deleted -> selectedIds = selectedIds - deleted })
+
     // Temporarily hide the global persistent mini player while the bottom
     // selection action bar or any modal sheet/dialog is open, so it can't
     // overlay and intercept touches over them. Mirrors SearchScreen.
@@ -85,10 +84,9 @@ fun TracksScreen(
         selectionMode ||
             sheetTrack != null ||
             addTrack != null ||
-            deleteTrack != null ||
+            deleter.isConfirming ||
             detailsTrack != null ||
-            showAddMany ||
-            showDeleteMany
+            showAddMany
     LaunchedEffect(anyOverlayOpen) {
         vm.setMiniPlayerHidden(anyOverlayOpen)
     }
@@ -143,7 +141,7 @@ fun TracksScreen(
                 }
             },
             onAdd = { showAddMany = true },
-            onDelete = { showDeleteMany = true },
+            onDelete = { deleter.request(selectedTracks) },
             onClear = { clearSelection() },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
@@ -162,8 +160,8 @@ fun TracksScreen(
                 sheetTrack = null
             },
             onDelete = {
-                deleteTrack = t
                 sheetTrack = null
+                deleter.request(listOf(t))
             },
             onShare = { shareTrack(context, t) },
             onDetails = {
@@ -182,17 +180,6 @@ fun TracksScreen(
                 addTrack = null
             },
             onDismiss = { addTrack = null },
-        )
-    }
-
-    deleteTrack?.let { t ->
-        DeleteTrackDialog(
-            track = t,
-            onConfirm = {
-                vm.deleteTrack(t.id)
-                deleteTrack = null
-            },
-            onDismiss = { deleteTrack = null },
         )
     }
 
@@ -216,18 +203,6 @@ fun TracksScreen(
                 showAddMany = false
             },
             onDismiss = { showAddMany = false },
-        )
-    }
-
-    if (showDeleteMany && selectedIds.isNotEmpty()) {
-        DeleteTracksDialog(
-            count = selectedIds.size,
-            onConfirm = {
-                vm.deleteTracks(selectedIds.toList())
-                clearSelection()
-                showDeleteMany = false
-            },
-            onDismiss = { showDeleteMany = false },
         )
     }
 }

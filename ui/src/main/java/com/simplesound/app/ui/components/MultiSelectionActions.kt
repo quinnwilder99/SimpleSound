@@ -258,10 +258,10 @@ fun DeleteTracksDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onConfirm) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        title = { Text("Delete tracks") },
+        title = { Text(if (count == 1) "Delete track" else "Delete tracks") },
         text = {
-            val trackWord = if (count == 1) "track" else "tracks"
-            Text("Permanently delete $count $trackWord from your library? This cannot be undone.")
+            val what = if (count == 1) "this track's file" else "$count files"
+            Text("Delete $what from your device? It is removed from storage and every playlist. This cannot be undone.")
         },
     )
 }

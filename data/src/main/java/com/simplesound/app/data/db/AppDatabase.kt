@@ -3,6 +3,7 @@ package com.simplesound.app.data.db
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * The on-device SQLite database holding everything the user would be upset to lose
@@ -38,7 +39,7 @@ import androidx.room.migration.Migration
         PlayStatsEntity::class,
         CustomOrderEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -58,10 +59,25 @@ abstract class AppDatabase : RoomDatabase() {
         const val NAME = "simplesound.db"
 
         /**
-         * Every schema migration, in order. Wired into the builder in [DatabaseModule].
-         * Empty while the schema is still at version 1 — add to it per the checklist
-         * in this file's KDoc. Never remove or reorder an entry once shipped.
+         * v1 -> v2: `tracks` gains `path` (stable identity across MediaStore id
+         * changes) and `missingSinceSec` (soft-delete for tracks that vanish from
+         * MediaStore, instead of immediately dropping their favorites/playlists/stats).
+         * Existing rows are all present tracks, so the defaults ('' / 0) are correct;
+         * `path` is filled in by the next library scan.
          */
-        val MIGRATIONS: Array<Migration> = emptyArray()
+        val MIGRATION_1_2 =
+            object : Migration(1, 2) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE `tracks` ADD COLUMN `path` TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE `tracks` ADD COLUMN `missingSinceSec` INTEGER NOT NULL DEFAULT 0")
+                }
+            }
+
+        /**
+         * Every schema migration, in order. Wired into the builder in [DatabaseModule].
+         * Add to it per the checklist in this file's KDoc. Never remove or reorder an
+         * entry once shipped.
+         */
+        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
     }
 }

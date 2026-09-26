@@ -7,6 +7,9 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.sync.MediaStoreObserver
+import com.simplesound.app.ui.components.EmbeddedArt
+import com.simplesound.app.ui.components.EmbeddedArtFetcher
+import com.simplesound.app.ui.components.EmbeddedArtKeyer
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -35,10 +38,16 @@ class SimpleSoundApp : Application(), ImageLoaderFactory, Configuration.Provider
     }
 
     /**
-     * Provides the process-wide default Coil [ImageLoader] for loading
-     * album art and the static PNG fallback placeholder.
+     * Provides the process-wide default Coil [ImageLoader] for loading album art,
+     * per-track embedded art ([EmbeddedArt]), and the static PNG fallback placeholder.
      */
-    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this).build()
+    override fun newImageLoader(): ImageLoader =
+        ImageLoader.Builder(this)
+            .components {
+                add(EmbeddedArtKeyer())
+                add(EmbeddedArtFetcher.Factory())
+            }
+            .build()
 
     override val workManagerConfiguration: Configuration
         get() =

@@ -43,7 +43,7 @@ fun FoldersScreen(vm: AppViewModel) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
         items(folders, key = { it.first }) { (folder, list) ->
             Row(
-                Modifier.fillMaxWidth().clickable { player.playQueue(list, 0) }
+                Modifier.fillMaxWidth().clickable { player.playQueue(list, 0, folder.substringAfterLast('/')) }
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

@@ -39,6 +39,7 @@ crash-reporting service.
 | `READ_MEDIA_AUDIO` | Finds the songs already stored on your device so the library can be built and played. | No |
 | `POST_NOTIFICATIONS` | Shows the playback notification (title, artist, play/pause/skip) while music is playing. | No |
 | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Keeps music playing when the app is in the background, like every other music player. | No |
+| `WRITE_EXTERNAL_STORAGE` (Android 10 and older only) | Deletes a song's file when you choose Delete. Newer Android versions ask you to confirm each delete in a system prompt instead. | No |
 | `USE_FULL_SCREEN_INTENT` | Powers an optional lock-screen control bar (Settings → Edge control bar). Off by default; only used if you turn it on. | No |
 
 ## Where your data lives

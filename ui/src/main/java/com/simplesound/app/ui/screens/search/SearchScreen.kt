@@ -44,11 +44,11 @@ import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
-import com.simplesound.app.ui.components.DeleteTracksDialog
 import com.simplesound.app.ui.components.SelectionActionBar
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
+import com.simplesound.app.ui.components.rememberTrackDeleter
 import com.simplesound.app.util.shareTrack
 
 /**
@@ -70,7 +70,9 @@ fun SearchScreen(
     val userPlaylists by vm.userPlaylists.collectAsStateWithLifecycle()
 
     var query by remember { mutableStateOf("") }
-    val results = remember(query) { vm.searchTracks(query) }
+    val allTracks by vm.tracks.collectAsStateWithLifecycle()
+    // Keyed on the library too, so results drop tracks as soon as they're deleted.
+    val results = remember(query, allTracks) { vm.searchTracks(query) }
 
     // ---- Single-track actions (mirrors TracksScreen) ----
     var sheetTrack by remember { mutableStateOf<Track?>(null) }
@@ -81,7 +83,6 @@ fun SearchScreen(
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     val selectionMode = selectedIds.isNotEmpty()
     var showAddMany by remember { mutableStateOf(false) }
-    var showDeleteMany by remember { mutableStateOf(false) }
 
     val selectedTracks: List<Track> =
         remember(selectedIds, results) {
@@ -96,6 +97,8 @@ fun SearchScreen(
     fun clearSelection() {
         selectedIds = emptySet()
     }
+
+    val deleter = rememberTrackDeleter(vm, onDeleted = { deleted -> selectedIds = selectedIds - deleted })
     val allSelected = results.isNotEmpty() && selectedIds.size == results.size
 
     fun toggleSelectAll() {
@@ -113,8 +116,8 @@ fun SearchScreen(
             sheetTrack != null ||
             addTrack != null ||
             detailsTrack != null ||
-            showAddMany ||
-            showDeleteMany
+            deleter.isConfirming ||
+            showAddMany
     LaunchedEffect(anyOverlayOpen) {
         vm.setMiniPlayerHidden(anyOverlayOpen)
     }
@@ -240,7 +243,7 @@ fun SearchScreen(
                     }
                 },
                 onAdd = { showAddMany = true },
-                onDelete = { showDeleteMany = true },
+                onDelete = { deleter.request(selectedTracks) },
                 onClear = { clearSelection() },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
@@ -258,7 +261,10 @@ fun SearchScreen(
                 addTrack = t
                 sheetTrack = null
             },
-            onDelete = { /* delete not offered from search */ },
+            onDelete = {
+                sheetTrack = null
+                deleter.request(listOf(t))
+            },
             onShare = { shareTrack(context, t) },
             onDetails = {
                 detailsTrack = t
@@ -299,18 +305,6 @@ fun SearchScreen(
                 showAddMany = false
             },
             onDismiss = { showAddMany = false },
-        )
-    }
-
-    if (showDeleteMany && selectedIds.isNotEmpty()) {
-        DeleteTracksDialog(
-            count = selectedIds.size,
-            onConfirm = {
-                vm.deleteTracks(selectedIds.toList())
-                clearSelection()
-                showDeleteMany = false
-            },
-            onDismiss = { showDeleteMany = false },
         )
     }
 }

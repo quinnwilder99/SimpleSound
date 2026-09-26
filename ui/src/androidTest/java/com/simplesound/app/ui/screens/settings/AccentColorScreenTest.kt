@@ -42,6 +42,7 @@ class AccentColorScreenTest {
         val repository =
             MusicRepository(
                 context,
+                db,
                 db.trackDao(),
                 db.playlistDao(),
                 db.playlistTrackDao(),

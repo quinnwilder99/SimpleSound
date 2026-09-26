@@ -11,165 +11,35 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
-import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.playback.PlayerController
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.navigation.SimpleSoundNavHost
 import com.simplesound.app.ui.theme.SimpleSoundTheme
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * The app's single UI Activity. Playback state (queue, position, shuffle/repeat)
+ * is owned, persisted and restored by PlaybackService itself -- this Activity only
+ * connects [player] to it while visible and kicks off the library scan.
+ */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var player: PlayerController
 
-    @Inject lateinit var musicRepository: MusicRepository
-
     private val viewModel: AppViewModel by viewModels()
-
-    /**
-     * Flips to true once this Activity has actually seen the player hold a
-     * non-empty queue. Until then, an empty [PlayerController.queue] means "a
-     * persisted queue is still waiting to be restored" (cold start, waiting on
-     * the MediaStore scan) rather than "the user emptied the queue" — so the
-     * lifecycle persistence below must NOT write the cleared state, or it would
-     * wipe the saved queue before [tryRestoreQueue] gets a chance to use it.
-     */
-    private var queueObservedNonEmpty = false
 
     private val requestPermissions =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            // Regardless of the grant result, attempt to load the library. If audio
-            // access was denied, the repository keeps its sample data.
+            // Regardless of the grant result, attempt to load the library; without
+            // audio access the repository leaves the stored library untouched.
             viewModel.loadDeviceLibrary(this)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Restore the most recent playback state. We prefer restoring the *full
-        // temp queue* (so the queue sheet + next/previous work), and fall back to
-        // restoring a single last-played track when no queue was saved or the
-        // saved playing id isn't part of the resolved queue. We use persisted
-        // snapshots so the UI shows instantly even before the MediaStore scan
-        // finishes loading the real library.
-        val lastId = musicRepository.lastPlayedTrackId()
-        val savedPosition = musicRepository.lastPlayedPosition()
-        val queueTitle = musicRepository.lastQueueTitle()
-        val queueIds = musicRepository.lastQueueTrackIds()
-        val queueIndex = musicRepository.lastQueueIndex()
-
-        // Resolves the persisted queue ids against the current in-memory library
-        // and, if they match, restores the full queue. Returns true on success.
-        fun tryRestoreQueue(): Boolean {
-            if (queueIds.isEmpty() || queueIndex < 0) return false
-            val resolved = musicRepository.tracksByIds(queueIds)
-            if (resolved.isEmpty()) return false
-            val playing =
-                resolved.firstOrNull { it.id == lastId } ?: resolved.getOrNull(queueIndex)
-                    ?: return false
-            val idx = resolved.indexOf(playing)
-            player.restoreQueue(resolved, idx, queueTitle, savedPosition)
-            return true
-        }
-
-        // On a cold start (e.g. after the OS killed the process when the task was
-        // swiped away while paused) the MediaStore scan hasn't run yet, so the
-        // library is still the sample seed and tracksByIds() above resolves
-        // nothing -- this always misses on a true cold start. Retry once the
-        // real device library finishes loading (see the "upgrade" collector
-        // below for the single-track equivalent), but only if nothing has
-        // already populated the queue in the meantime (either this retry
-        // succeeding once, or the user starting playback of their own).
-        var restoredQueue = tryRestoreQueue()
-        if (!restoredQueue) {
-            lifecycleScope.launch {
-                musicRepository.tracks.collect {
-                    // Bail if the queue got populated another way already, or if
-                    // the user has since started actual playback (e.g. of the
-                    // single-track fallback below) -- don't clobber that with a
-                    // stale restore.
-                    if (restoredQueue || player.queue.value.isNotEmpty() || player.isPlaying.value) {
-                        return@collect
-                    }
-                    if (tryRestoreQueue()) restoredQueue = true
-                }
-            }
-        }
-        if (!restoredQueue && lastId >= 0L) {
-            val snapshot = musicRepository.lastPlayedTrack()
-            val live = musicRepository.trackById(lastId)
-            // Pass the persisted position so the timeline + resume point are
-            // restored immediately. autoPrepareAndPause loads the track into the
-            // Media3 controller (paused) so tapping Play resumes from this spot.
-            player.restoreLastPlayedTrack(live ?: snapshot, savedPosition)
-        }
-        // Restore shuffle/repeat the same way as the queue/track above -- they live
-        // only on the in-memory Player otherwise, so they'd silently reset to off
-        // whenever the OS killed the process instead of just backgrounding the Activity.
-        player.restorePlaybackModes(musicRepository.lastShuffleEnabled(), musicRepository.lastRepeatMode())
-        // Persist the full snapshot of every subsequently played track so the bar
-        // survives the next restart with correct title/artist even offline. We
-        // also persist the current playback position so playback can resume.
-        lifecycleScope.launch {
-            player.lastPlayedTrack.collect { track ->
-                val pos = player.positionMs.value
-                musicRepository.saveLastPlayedTrack(track, pos)
-            }
-        }
-        // Persist the temp queue whenever it changes so the queue sheet +
-        // next/previous survive the next restart. We save the queue title, the
-        // ordered track ids, and the currently playing index.
-        lifecycleScope.launch {
-            combine(player.queue, player.queueIndex, player.queueTitle) { tracks, index, title ->
-                Triple(tracks, index, title)
-            }.collect { (tracks, index, title) ->
-                if (tracks.isNotEmpty()) {
-                    queueObservedNonEmpty = true
-                    musicRepository.saveQueue(title, tracks.map { it.id }, index)
-                } else if (queueObservedNonEmpty) {
-                    // The queue went from populated to empty during this session
-                    // (the user removed the last item) — that's a real clear.
-                    musicRepository.saveQueue(null, emptyList(), -1)
-                }
-                // Otherwise the queue is empty only because a saved queue hasn't
-                // finished restoring yet — leave the persisted snapshot alone.
-            }
-        }
-        // Persist shuffle/repeat whenever they change, same as the queue and
-        // last-played track above -- see restorePlaybackModes for why.
-        lifecycleScope.launch {
-            player.isShuffleOn.collect { musicRepository.saveShuffleEnabled(it) }
-        }
-        lifecycleScope.launch {
-            player.repeatMode.collect { musicRepository.saveRepeatMode(it) }
-        }
-        // Once the device library finishes loading, the persisted snapshot (which has
-        // a placeholder duration/album) can be upgraded to the full live [Track] for
-        // that id. This fixes the "disappears after restart" case where the last
-        // played track was a real device audio file that wasn't in memory yet at
-        // launch. We don't override the saved position here - the controller may
-        // already have one from the snapshot restore above.
-        lifecycleScope.launch {
-            musicRepository.tracks.combine(player.lastPlayedTrack) { lib, current ->
-                val id = current?.id ?: lastId
-                if (id >= 0L) lib.firstOrNull { it.id == id } else null
-            }.collect { upgraded ->
-                if (upgraded != null) {
-                    // Reuse the position the controller already has (either the
-                    // restored snapshot position or the live playback position),
-                    // and do NOT auto-prepare again if the player already has media
-                    // items - otherwise we'd reload the track and reset play state.
-                    val pos = player.positionMs.value
-                    player.restoreLastPlayedTrack(upgraded, pos, autoPrepareAndPause = false)
-                }
-            }
-        }
 
         requestPermissions.launch(requiredPermissions())
 
@@ -190,34 +60,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Persist the current playback position before releasing the controller
-        // so playback can resume from the correct spot after an app restart.
-        // Without this, the saved position would only be updated on track
-        // transitions, which is why the mini player reset to 00:00 after
-        // closing+reopening the app mid-track.
-        //
-        // player.lastPlayedTrack is only ever null before anything has played
-        // AND nothing was restored (i.e. there is no saved snapshot to protect),
-        // so passing it straight through is safe — a null here clears keys that
-        // are already absent.
-        val track = player.lastPlayedTrack.value
-        val pos = player.positionMs.value
-        musicRepository.saveLastPlayedTrack(track, pos)
-        // Persist the queue snapshot too so the queue sheet survives restart.
-        // Only clear the saved queue if we've actually seen a non-empty queue
-        // this session (a real user-initiated clear). An empty queue before then
-        // just means restore is still pending — see queueObservedNonEmpty.
-        val tracks = player.queue.value
-        if (tracks.isNotEmpty()) {
-            queueObservedNonEmpty = true
-            musicRepository.saveQueue(
-                player.queueTitle.value,
-                tracks.map { it.id },
-                player.queueIndex.value,
-            )
-        } else if (queueObservedNonEmpty) {
-            musicRepository.saveQueue(null, emptyList(), -1)
-        }
         player.release()
     }
 

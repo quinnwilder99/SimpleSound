@@ -12,8 +12,14 @@ data class Track(
     val durationMs: Long,
     val uri: String,
     val albumArtUri: String? = null,
+    /** Parent directory relative to its storage volume, e.g. "Music/Rap". */
     val folder: String = "",
     val dateAddedSec: Long = 0L,
+    /**
+     * Absolute file path as MediaStore reports it. Used only as a stable identity
+     * across MediaStore id changes (see LibraryReconciler); may be blank.
+     */
+    val path: String = "",
     val playCount: Int = 0,
     val lastPlayedSec: Long = 0L,
 ) {

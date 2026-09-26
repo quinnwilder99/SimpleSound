@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Playback resumption: lets a headset/Bluetooth play button or the system's
+             media controls restart PlaybackService after the app was killed; the
+             service then asks MediaSession.Callback.onPlaybackResumption what to play
+             (the saved queue). Declared here, next to the media3-session dependency it
+             comes from, and merged into the app manifest. -->
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

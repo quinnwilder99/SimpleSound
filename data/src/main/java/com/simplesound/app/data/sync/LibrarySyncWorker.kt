@@ -1,14 +1,11 @@
 package com.simplesound.app.data.sync
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.content.ContextCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.simplesound.app.data.MusicRepository
+import com.simplesound.app.data.hasAudioPermission
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
@@ -29,24 +26,13 @@ class LibrarySyncWorker
             // Media access may have been revoked since the observer was registered
             // (e.g. the user pulled the permission in Settings). Skip quietly rather
             // than let the scan fail and trigger a retry loop.
-            if (!hasAudioPermission()) return Result.success()
+            if (!hasAudioPermission(applicationContext)) return Result.success()
             return try {
                 musicRepository.loadDeviceLibrary(applicationContext)
                 Result.success()
             } catch (t: Throwable) {
                 Result.retry()
             }
-        }
-
-        private fun hasAudioPermission(): Boolean {
-            val permission =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    Manifest.permission.READ_MEDIA_AUDIO
-                } else {
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                }
-            return ContextCompat.checkSelfPermission(applicationContext, permission) ==
-                PackageManager.PERMISSION_GRANTED
         }
 
         companion object {

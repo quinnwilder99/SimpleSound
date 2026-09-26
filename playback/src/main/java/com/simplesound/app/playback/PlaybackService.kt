@@ -11,15 +11,20 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
 import androidx.media3.session.MediaSessionService
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
 import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.SettingsStore
 import com.simplesound.app.data.model.EdgeBarSide
+import com.simplesound.app.data.model.Track
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +79,12 @@ class PlaybackService : MediaSessionService() {
     private val errorRecoveryListener =
         object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
+                // Only skip ahead when the user actually wants playback. A paused
+                // session (e.g. the saved queue just restored on service start, or
+                // media permission not granted yet) must not start playing -- or
+                // walk the saved resume point -- on its own; pressing play re-prepares
+                // and lands back here with playWhenReady set.
+                if (!player.playWhenReady) return
                 errorSkipCount++
                 if (errorSkipCount > player.mediaItemCount) {
                     player.stop()
@@ -137,18 +148,28 @@ class PlaybackService : MediaSessionService() {
     private var suppressNextTransitionCancel = false
 
     // ---- Play-stats recording ("Recently played" / "Most played") ----
-    // A track only counts as "played" once it has been playing continuously for
-    // PLAY_RECORD_THRESHOLD_MS -- otherwise skimming/skipping through the queue
-    // would spam the Recently played playlist and inflate play counts. Recorded
-    // here (in the service, not PlayerController) so it keeps working while the
-    // app is backgrounded and the Activity's controller is torn down.
+    // A track only counts as "played" once it has actually been listened to for
+    // min(PLAY_RECORD_THRESHOLD_MS, half its length) -- otherwise skimming/skipping
+    // through the queue would spam Recently played and inflate Most played (the old
+    // flat 5 s counted almost every skip). Listening time accumulates across pauses
+    // within the same item. Recorded here (in the service, not PlayerController) so
+    // it keeps working while the app is backgrounded.
     private var recordPlayRunnable: Runnable? = null
     private var recordedCurrentItem = false
+    private var listenedMs = 0L
+    private var listenStartElapsed = 0L
 
     private val playRecordListener =
         object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) scheduleRecordPlay() else cancelScheduledRecordPlay()
+                if (isPlaying) {
+                    listenStartElapsed = SystemClock.elapsedRealtime()
+                    scheduleRecordPlay()
+                } else {
+                    if (listenStartElapsed != 0L) listenedMs += SystemClock.elapsedRealtime() - listenStartElapsed
+                    listenStartElapsed = 0L
+                    cancelScheduledRecordPlay()
+                }
             }
 
             override fun onMediaItemTransition(
@@ -157,16 +178,24 @@ class PlaybackService : MediaSessionService() {
             ) {
                 cancelScheduledRecordPlay()
                 recordedCurrentItem = false
+                listenedMs = 0L
+                listenStartElapsed = if (player.isPlaying) SystemClock.elapsedRealtime() else 0L
                 if (player.isPlaying) scheduleRecordPlay()
             }
         }
+
+    private fun playRecordThresholdMs(): Long {
+        val duration = player.duration
+        if (duration <= 0 || duration == C.TIME_UNSET) return PLAY_RECORD_THRESHOLD_MS
+        return minOf(PLAY_RECORD_THRESHOLD_MS, duration / 2)
+    }
 
     private fun scheduleRecordPlay() {
         if (recordedCurrentItem) return
         cancelScheduledRecordPlay()
         val r = Runnable { recordCurrentItemPlayed() }
         recordPlayRunnable = r
-        sleepHandler.postDelayed(r, PLAY_RECORD_THRESHOLD_MS)
+        sleepHandler.postDelayed(r, (playRecordThresholdMs() - listenedMs).coerceAtLeast(0L))
     }
 
     private fun cancelScheduledRecordPlay() {
@@ -181,6 +210,154 @@ class PlaybackService : MediaSessionService() {
         recordedCurrentItem = true
         musicRepository.recordTrackPlayed(trackId)
     }
+
+    // ---- Playback state persistence (queue, position, shuffle/repeat) ----
+    // Owned here rather than by the Activity: the service is what keeps playing
+    // (and advancing through the queue) while the UI is gone, so it is the only
+    // component that knows the real resume point if the process is killed later.
+    // Saved on every structural change plus every SAVE_POSITION_INTERVAL_MS while
+    // playing.
+    private var hadQueue = false
+
+    private val positionSaver =
+        object : Runnable {
+            override fun run() {
+                saveState(includeQueue = false)
+                sleepHandler.postDelayed(this, SAVE_POSITION_INTERVAL_MS)
+            }
+        }
+
+    private val stateSaveListener =
+        object : Player.Listener {
+            override fun onMediaItemTransition(
+                mediaItem: MediaItem?,
+                reason: Int,
+            ) = saveState(includeQueue = true)
+
+            override fun onTimelineChanged(
+                timeline: Timeline,
+                reason: Int,
+            ) {
+                if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) saveState(includeQueue = true)
+            }
+
+            override fun onPlaylistMetadataChanged(mediaMetadata: MediaMetadata) = saveState(includeQueue = true)
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                sleepHandler.removeCallbacks(positionSaver)
+                if (isPlaying) sleepHandler.postDelayed(positionSaver, SAVE_POSITION_INTERVAL_MS)
+                saveState(includeQueue = false)
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) saveState(includeQueue = false)
+            }
+
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) =
+                musicRepository.saveShuffleEnabled(shuffleModeEnabled)
+
+            override fun onRepeatModeChanged(repeatMode: Int) =
+                musicRepository.saveRepeatMode(
+                    repeatModeToSaved(repeatMode),
+                )
+        }
+
+    private fun saveState(includeQueue: Boolean) {
+        val count = player.mediaItemCount
+        if (count == 0) {
+            // Only a queue that existed this session and was then emptied is a real
+            // clear; an empty player at startup just means the restore hasn't landed.
+            if (hadQueue) {
+                musicRepository.saveQueue(null, emptyList(), -1)
+                musicRepository.saveLastPlayedTrack(null)
+                hadQueue = false
+            }
+            return
+        }
+        hadQueue = true
+        if (includeQueue) {
+            val ids = (0 until count).mapNotNull { player.getMediaItemAt(it).mediaId.toLongOrNull() }
+            musicRepository.saveQueue(player.playlistMetadata.title?.toString(), ids, player.currentMediaItemIndex)
+        }
+        currentTrackSnapshot()?.let { musicRepository.saveLastPlayedTrack(it, player.currentPosition) }
+    }
+
+    private fun currentTrackSnapshot(): Track? {
+        val item = player.currentMediaItem ?: return null
+        return item.mediaId.toLongOrNull()?.let { musicRepository.trackById(it) } ?: item.toSnapshotTrack()
+    }
+
+    /**
+     * Rebuilds the last saved queue from the library. Falls back to just the last
+     * played track when the saved queue no longer resolves (tracks deleted since).
+     */
+    private suspend fun loadSavedQueue(): MediaItemsWithStartPosition? {
+        musicRepository.awaitLibraryLoaded()
+        val lastId = musicRepository.lastPlayedTrackId()
+        val tracks =
+            musicRepository.tracksByIds(musicRepository.lastQueueTrackIds())
+                .ifEmpty { listOfNotNull(musicRepository.trackById(lastId)) }
+        if (tracks.isEmpty()) return null
+        val byId = tracks.indexOfFirst { it.id == lastId }
+        val index = if (byId >= 0) byId else musicRepository.lastQueueIndex().coerceIn(0, tracks.lastIndex)
+        val position = if (byId >= 0) musicRepository.lastPlayedPosition() else 0L
+        return MediaItemsWithStartPosition(tracks.map { it.toMediaItem() }, index, position)
+    }
+
+    /** Only called right before the saved queue is actually handed to the player. */
+    private fun applySavedQueueTitle() {
+        player.playlistMetadata = MediaMetadata.Builder().setTitle(musicRepository.lastQueueTitle()).build()
+    }
+
+    /** Set once a saved queue has been handed to the player (by either path below). */
+    private var restoreDone = false
+
+    /**
+     * Loads the saved queue into an empty player, paused, whenever the service
+     * starts -- so the app, the notification and headset buttons all see the same
+     * queue. playWhenReady is left alone: if a controller already pressed play while
+     * the library was loading, playback starts as soon as the items land.
+     */
+    private fun restoreSavedQueueIfEmpty() {
+        serviceScope.launch {
+            val saved = loadSavedQueue() ?: return@launch
+            if (restoreDone || player.mediaItemCount > 0) return@launch
+            restoreDone = true
+            applySavedQueueTitle()
+            player.setMediaItems(saved.mediaItems, saved.startIndex, saved.startPositionMs)
+            player.prepare()
+        }
+    }
+
+    /**
+     * Media3 playback resumption: a headset/Bluetooth play button or the system media
+     * controls pressing play while the app isn't running restarts this service with
+     * an empty player and asks what to play (needs MediaButtonReceiver in the manifest).
+     */
+    private val sessionCallback =
+        object : MediaSession.Callback {
+            override fun onPlaybackResumption(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+            ): ListenableFuture<MediaItemsWithStartPosition> {
+                val future = SettableFuture.create<MediaItemsWithStartPosition>()
+                serviceScope.launch {
+                    val saved = loadSavedQueue()
+                    if (saved != null) {
+                        restoreDone = true
+                        applySavedQueueTitle()
+                        future.set(saved)
+                    } else {
+                        future.setException(UnsupportedOperationException("Nothing to resume"))
+                    }
+                }
+                return future
+            }
+        }
 
     private val crossfadeListener =
         object : Player.Listener {
@@ -252,14 +429,19 @@ class PlaybackService : MediaSessionService() {
                 )
                 .setHandleAudioBecomingNoisy(true)
                 .build()
+        player.shuffleModeEnabled = musicRepository.lastShuffleEnabled()
+        player.repeatMode = savedToRepeatMode(musicRepository.lastRepeatMode())
         player.addListener(crossfadeListener)
         player.addListener(playRecordListener)
         player.addListener(errorRecoveryListener)
+        player.addListener(stateSaveListener)
         mediaSession =
             MediaSession.Builder(this, player)
                 .setBitmapLoader(TrackArtworkBitmapLoader(this))
+                .setCallback(sessionCallback)
                 .build()
         restoreSleepTimerIfNeeded()
+        restoreSavedQueueIfEmpty()
 
         lockScreenControl = LockScreenControlLauncher(this, player)
         player.addListener(lockScreenControlListener)
@@ -493,6 +675,7 @@ class PlaybackService : MediaSessionService() {
             .build()
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        saveState(includeQueue = true)
         super.onTaskRemoved(rootIntent)
         if (!player.playWhenReady) {
             player.stop()
@@ -502,6 +685,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        saveState(includeQueue = true)
+        sleepHandler.removeCallbacks(positionSaver)
         stopCrossfadeWatcher()
         cancelActiveCrossfade()
         cancelScheduledRecordPlay()
@@ -525,8 +710,25 @@ class PlaybackService : MediaSessionService() {
         private const val SLEEP_PREFS = "simplesound_sleep_timer"
         private const val KEY_DEADLINE_ELAPSED = "deadline_elapsed"
 
-        /** Minimum continuous playback (ms) before a track counts as "played". */
-        private const val PLAY_RECORD_THRESHOLD_MS = 5_000L
+        /** Listening time before a track counts as "played" (or half the track, if shorter). */
+        private const val PLAY_RECORD_THRESHOLD_MS = 30_000L
+
+        private const val SAVE_POSITION_INTERVAL_MS = 5_000L
+
+        /** Saved repeat encoding (0 = off, 1 = all, 2 = one) <-> [Player] constants. */
+        private fun repeatModeToSaved(mode: Int): Int =
+            when (mode) {
+                Player.REPEAT_MODE_ALL -> 1
+                Player.REPEAT_MODE_ONE -> 2
+                else -> 0
+            }
+
+        private fun savedToRepeatMode(saved: Int): Int =
+            when (saved) {
+                1 -> Player.REPEAT_MODE_ALL
+                2 -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
+            }
 
         const val ACTION_SET_SLEEP_TIMER = "com.simplesound.app.SET_SLEEP_TIMER"
         const val ACTION_CANCEL_SLEEP_TIMER = "com.simplesound.app.CANCEL_SLEEP_TIMER"

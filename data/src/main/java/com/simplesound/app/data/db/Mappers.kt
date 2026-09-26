@@ -14,6 +14,7 @@ fun Track.toEntity(): TrackEntity =
         albumArtUri = albumArtUri,
         folder = folder,
         dateAddedSec = dateAddedSec,
+        path = path,
     )
 
 /** Play count / last-played time are merged in separately from [PlayStatsEntity]. */
@@ -28,6 +29,7 @@ fun TrackEntity.toDomain(): Track =
         albumArtUri = albumArtUri,
         folder = folder,
         dateAddedSec = dateAddedSec,
+        path = path,
     )
 
 /** [Playlist.trackIds] is resolved separately from [PlaylistTrackCrossRef] rows. */

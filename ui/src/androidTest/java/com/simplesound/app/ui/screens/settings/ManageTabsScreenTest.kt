@@ -52,6 +52,7 @@ class ManageTabsScreenTest {
         val repository =
             MusicRepository(
                 context,
+                db,
                 db.trackDao(),
                 db.playlistDao(),
                 db.playlistTrackDao(),

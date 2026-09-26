@@ -5,6 +5,7 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -27,7 +28,7 @@ class AppDatabaseMigrationTest {
     private val testDbName = "migration-test.db"
 
     // Bump in lockstep with @Database(version = ...) on AppDatabase.
-    private val latestVersion = 1
+    private val latestVersion = 2
 
     @get:Rule
     val helper =
@@ -54,6 +55,41 @@ class AppDatabaseMigrationTest {
                 *AppDatabase.MIGRATIONS,
             )
         }
+    }
+
+    @Test
+    @Throws(IOException::class)
+    fun migrate1To2KeepsTracksFavoritesAndPlaylists() {
+        helper.createDatabase(testDbName, 1).apply {
+            execSQL(
+                "INSERT INTO tracks (id, title, artist, album, durationMs, uri, albumArtUri, folder, dateAddedSec) " +
+                    "VALUES (7, 'Song', 'Artist', 'Album', 1000, 'content://x/7', NULL, 'Music', 123)",
+            )
+            execSQL("INSERT INTO favorite_tracks (trackId) VALUES (7)")
+            execSQL(
+                "INSERT INTO playlists (id, name, coverUri, favorited, favoritedAt, position) " +
+                    "VALUES ('p', 'Mix', NULL, 0, 0, 0)",
+            )
+            execSQL("INSERT INTO playlist_track_cross_ref (playlistId, trackId, position) VALUES ('p', 7, 0)")
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(testDbName, 2, true, AppDatabase.MIGRATION_1_2)
+        db.query("SELECT title, path, missingSinceSec FROM tracks WHERE id = 7").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("Song", c.getString(0))
+            assertEquals("", c.getString(1))
+            assertEquals(0L, c.getLong(2))
+        }
+        db.query("SELECT COUNT(*) FROM favorite_tracks").use { c ->
+            c.moveToFirst()
+            assertEquals(1, c.getInt(0))
+        }
+        db.query("SELECT COUNT(*) FROM playlist_track_cross_ref").use { c ->
+            c.moveToFirst()
+            assertEquals(1, c.getInt(0))
+        }
+        db.close()
     }
 
     @Test

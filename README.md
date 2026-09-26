@@ -18,7 +18,7 @@ SimpleSound is a dark-only Android music player focused on a calm, flagship list
 
 * Automatically scans the device music library using MediaStore
 * Offline-first local music access
-* Sample-data fallback when no songs are available
+* Songs that temporarily disappear (SD card removed, media re-index) keep their playlists, favorites and play history for 30 days
 * Sort tracks by:
 
   * Date added
@@ -82,7 +82,7 @@ Long-press any track to enter selection mode across Tracks, Albums, Artists, Fol
 * Play selected tracks
 * Add to playlist
 * Share
-* Remove from playlist / Delete
+* Remove from playlist / Delete (deletes the files from the device; Android 11+ confirms with the system prompt)
 * Select all / Deselect all
 
 ---
@@ -94,6 +94,7 @@ Powered by AndroidX Media3.
 Features:
 
 * Background playback service with persistent lock-screen / notification controls
+* Queue, position, shuffle and repeat are saved by the playback service itself and restored on the next launch; a headset or system play button resumes where you left off even after the app was closed
 * Media session integration
 * ExoPlayer-based audio engine
 * **Queue** — view and reorder the current play queue on the fly without touching the source playlist

@@ -191,26 +191,6 @@ fun AddToPlaylistDialog(
     )
 }
 
-/** Confirmation dialog before permanently deleting a track. */
-@Composable
-fun DeleteTrackDialog(
-    track: Track,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = { onConfirm() }) {
-                Text("Delete", color = MaterialTheme.colorScheme.error)
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        title = { Text("Delete track") },
-        text = { Text("Permanently delete \"${track.title}\" from your library? This cannot be undone.") },
-    )
-}
-
 /** Dialog showing detailed metadata for a track. */
 @Composable
 fun TrackDetailsDialog(

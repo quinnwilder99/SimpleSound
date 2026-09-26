@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDownward
@@ -51,11 +51,17 @@ import com.simplesound.app.data.model.Track
  *   - remove a row from the temp queue.
  *
  * The currently playing row is highlighted via [currentIndex].
+ *
+ * Rows are listed in [playOrder] -- the order the player will actually go through
+ * them -- so with shuffle on the sheet shows what really plays next rather than the
+ * original list order. Moving rows is disabled while shuffled, since a move reorders
+ * the underlying list, not the shuffled order the user is looking at.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QueueSheet(
     queue: List<Track>,
+    playOrder: List<Int>,
     currentIndex: Int,
     queueTitle: String,
     onPlay: (index: Int) -> Unit,
@@ -75,6 +81,10 @@ fun QueueSheet(
     // index-based API to change.
     var actionInFlight by remember { mutableStateOf(false) }
     LaunchedEffect(queue) { actionInFlight = false }
+
+    // Fall back to list order if the play order is momentarily out of step with the queue.
+    val rows = if (playOrder.size == queue.size) playOrder else queue.indices.toList()
+    val shuffled = rows != queue.indices.toList()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -105,8 +115,8 @@ fun QueueSheet(
                         if (queue.isEmpty()) {
                             "Empty"
                         } else {
-                            val pos = (currentIndex + 1).coerceIn(1, queue.size)
-                            "$pos of ${queue.size}"
+                            val pos = (rows.indexOf(currentIndex) + 1).coerceIn(1, queue.size)
+                            if (shuffled) "$pos of ${queue.size} · Shuffled" else "$pos of ${queue.size}"
                         }
                     Text(
                         text = countText,
@@ -141,13 +151,15 @@ fun QueueSheet(
                 }
             } else {
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                    itemsIndexed(queue, key = { _, t -> t.id }) { index, track ->
+                    // Keyed by list index, not track id: the same track can be queued twice.
+                    items(rows, key = { it }) { index ->
+                        val track = queue[index]
                         val isCurrent = index == currentIndex
                         QueueRow(
                             track = track,
                             isCurrent = isCurrent,
-                            canMoveUp = index > 0 && !actionInFlight,
-                            canMoveDown = index < queue.lastIndex && !actionInFlight,
+                            canMoveUp = !shuffled && index > 0 && !actionInFlight,
+                            canMoveDown = !shuffled && index < queue.lastIndex && !actionInFlight,
                             canRemove = !actionInFlight,
                             onPlay = { onPlay(index) },
                             onMoveUp = {
@@ -244,14 +256,18 @@ private fun QueueRow(
             Icon(
                 Icons.Rounded.ArrowUpward,
                 contentDescription = "Move up",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Explicit tint bypasses IconButton's disabled alpha, so dim it here --
+                // otherwise disabled arrows (list edges, shuffled queue) look tappable.
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (canMoveUp) 1f else 0.3f),
             )
         }
         IconButton(onClick = onMoveDown, enabled = canMoveDown) {
             Icon(
                 Icons.Rounded.ArrowDownward,
                 contentDescription = "Move down",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Explicit tint bypasses IconButton's disabled alpha, so dim it here --
+                // otherwise disabled arrows (list edges, shuffled queue) look tappable.
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (canMoveDown) 1f else 0.3f),
             )
         }
         IconButton(onClick = onRemove, enabled = canRemove) {
