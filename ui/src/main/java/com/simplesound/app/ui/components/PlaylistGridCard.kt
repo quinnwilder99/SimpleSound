@@ -41,6 +41,9 @@ import com.simplesound.app.data.model.Playlist
  * The playlist name sits beneath the artwork (the track count is no longer shown),
  * and each card is wrapped in a liquid-glass surface so the playlists visually
  * separate from one another.
+ *
+ * [interactive] is false while the host is reordering cards, so taps and
+ * long-presses here don't compete with its drag handle.
  */
 @Composable
 fun PlaylistGridCard(
@@ -49,6 +52,7 @@ fun PlaylistGridCard(
     onClick: () -> Unit,
     onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
+    interactive: Boolean = true,
 ) {
     val wobble =
         if (shaking) {
@@ -88,9 +92,15 @@ fun PlaylistGridCard(
                     .rotate(wobble)
                     .clip(RoundedCornerShape(18.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .pointerInput(playlist.id) {
-                        detectTapGestures(onTap = { onClick() }, onLongPress = { onLongPress() })
-                    },
+                    .then(
+                        if (interactive) {
+                            Modifier.pointerInput(playlist.id) {
+                                detectTapGestures(onTap = { onClick() }, onLongPress = { onLongPress() })
+                            }
+                        } else {
+                            Modifier
+                        },
+                    ),
         ) {
             Artwork(uri = playlist.coverUri, modifier = Modifier.fillMaxSize(), corner = 18.dp, iconSize = 48.dp)
             // Legibility scrim over the artwork.

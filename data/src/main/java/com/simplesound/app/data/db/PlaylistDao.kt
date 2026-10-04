@@ -32,4 +32,10 @@ interface PlaylistDao {
         id: String,
         position: Int,
     )
+
+    @Query("UPDATE playlists SET favoritedAt = :favoritedAt WHERE id = :id")
+    suspend fun updateFavoritedAt(
+        id: String,
+        favoritedAt: Long,
+    )
 }

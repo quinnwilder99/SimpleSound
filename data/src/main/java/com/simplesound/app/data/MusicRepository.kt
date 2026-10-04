@@ -928,6 +928,25 @@ class MusicRepository
             }
         }
 
+        /**
+         * Persist a user-chosen order for the hearted playlists on the Favorites tab
+         * ([orderedIds] top to bottom; "Favorite tracks" is pinned first and not part
+         * of it). Stored by reshuffling the existing [Playlist.favoritedAt] stamps
+         * (see [reorderedFavoriteStamps]) rather than adding a column, so there is no
+         * schema change.
+         */
+        fun reorderFavoritePlaylists(orderedIds: List<String>) {
+            val stamps: Map<String, Long>
+            synchronized(lock) {
+                stamps = reorderedFavoriteStamps(allPlaylists.filter { it.favorited }, orderedIds)
+                allPlaylists = allPlaylists.map { pl -> stamps[pl.id]?.let { pl.copy(favoritedAt = it) } ?: pl }
+                publishLocked()
+            }
+            write {
+                db.withTransaction { stamps.forEach { (id, at) -> playlistDao.updateFavoritedAt(id, at) } }
+            }
+        }
+
         fun playlistById(id: String): Playlist? =
             // nativePlaylists() already ends with favoriteTracksPlaylist(), so a third
             // fallback for it here would never be reached.

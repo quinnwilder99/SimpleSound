@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.Reorder
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -26,8 +27,9 @@ import androidx.compose.ui.unit.dp
 import com.simplesound.app.data.model.Playlist
 
 /**
- * The four press-and-hold options for a playlist card: Play, Add, Share, Remove —
- * matching the reference interaction.
+ * The press-and-hold options for a playlist card: Play, Add, Share, Remove —
+ * matching the reference interaction — plus Change order when [onChangeOrder] is
+ * given.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +40,7 @@ fun PlaylistOptionsSheet(
     onShare: () -> Unit,
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
+    onChangeOrder: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
@@ -58,6 +61,12 @@ fun PlaylistOptionsSheet(
             Item(Icons.Rounded.Share, "Share") {
                 onShare()
                 onDismiss()
+            }
+            if (onChangeOrder != null) {
+                Item(Icons.Rounded.Reorder, "Change order") {
+                    onChangeOrder()
+                    onDismiss()
+                }
             }
             Item(Icons.Rounded.Delete, "Remove", destructive = true) {
                 onRemove()

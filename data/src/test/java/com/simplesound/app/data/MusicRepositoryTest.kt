@@ -153,6 +153,37 @@ class MusicRepositoryTest {
     }
 
     @Test
+    fun `reorderFavoritePlaylists sets the favorites tab order, persists it, and new hearts still land on top`() =
+        runTest {
+            val a = repository.createPlaylist("A")
+            val b = repository.createPlaylist("B")
+            val c = repository.createPlaylist("C")
+            val d = repository.createPlaylist("D")
+            repository.toggleFavoritePlaylist(a)
+            repository.toggleFavoritePlaylist(b)
+            repository.toggleFavoritePlaylist(c)
+            // Same-millisecond hearts are possible in a test; the reorder must still be strict.
+
+            repository.reorderFavoritePlaylists(listOf(a, c, b))
+            assertEquals(
+                listOf("Favorite tracks", "A", "C", "B"),
+                repository.favoritesTabPlaylists.value.map { it.name },
+            )
+
+            repository.awaitPendingWrites()
+            val persisted =
+                db.playlistDao().getAll().filter { it.favorited }.sortedByDescending { it.favoritedAt }.map { it.id }
+            assertEquals(listOf(a, c, b), persisted)
+
+            Thread.sleep(5)
+            repository.toggleFavoritePlaylist(d)
+            assertEquals(
+                listOf("Favorite tracks", "D", "A", "C", "B"),
+                repository.favoritesTabPlaylists.value.map { it.name },
+            )
+        }
+
+    @Test
     fun `reorderPlaylists changes exposed order`() {
         val a = repository.createPlaylist("A")
         val b = repository.createPlaylist("B")

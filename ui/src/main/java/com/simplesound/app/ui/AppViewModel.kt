@@ -220,6 +220,8 @@ class AppViewModel
 
         fun reorderPlaylists(orderedIds: List<String>) = repository.reorderPlaylists(orderedIds)
 
+        fun reorderFavoritePlaylists(orderedIds: List<String>) = repository.reorderFavoritePlaylists(orderedIds)
+
         fun nativePlaylists() = repository.nativePlaylists()
 
         fun playlistById(id: String) = repository.playlistById(id)

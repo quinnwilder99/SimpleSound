@@ -14,8 +14,10 @@ data class Playlist(
     /** Whether the user "hearted" this playlist (shows in the Favorites tab). */
     val favorited: Boolean = false,
     /**
-     * Epoch milliseconds of when the user last hearted this playlist. Used to order
-     * the Favorites tab as a stack: most recently hearted appears on top. 0 when unhearted.
+     * Sort key for the Favorites tab (highest on top). Set to epoch millis when the
+     * user hearts the playlist, so new hearts land on top; "Change order" on that tab
+     * reshuffles the existing stamps (see MusicRepository.reorderFavoritePlaylists).
+     * 0 when unhearted.
      */
     val favoritedAt: Long = 0L,
 ) {
