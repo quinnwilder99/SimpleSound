@@ -66,6 +66,7 @@ import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
+import com.simplesound.app.ui.components.AlphabetScrollbar
 import com.simplesound.app.ui.components.Artwork
 import com.simplesound.app.ui.components.CoverCropDialog
 import com.simplesound.app.ui.components.PlaylistSelectionActionBar
@@ -395,6 +396,19 @@ fun PlaylistDetailScreen(
                         )
                     }
                 }
+            }
+
+            // A–Z fast-scroll bar, only while sorted by name. Hidden in selection
+            // mode, where the rows' drag handles and the action bar take over (and a
+            // drag-reorder switches the sort to Custom order anyway).
+            if (sort == SortOption.NAME && !selectionMode && tracks.isNotEmpty()) {
+                AlphabetScrollbar(
+                    tracks = tracks,
+                    listState = listState,
+                    headerItemCount = PLAYLIST_HEADER_ITEMS,
+                    // Bottom inset matches the list's padding so the bar clears the mini player.
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, bottom = 160.dp, end = 2.dp),
+                )
             }
 
             // Multi-selection action bar: Play / Add / Share / Remove.

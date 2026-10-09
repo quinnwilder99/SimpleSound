@@ -3,8 +3,11 @@
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -23,6 +26,7 @@ import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
+import com.simplesound.app.ui.components.AlphabetScrollbar
 import com.simplesound.app.ui.components.SelectionActionBar
 import com.simplesound.app.ui.components.SortHeader
 import com.simplesound.app.ui.components.TrackActionsSheet
@@ -50,6 +54,7 @@ fun TracksScreen(
 
     val sort by vm.tracksSort.collectAsStateWithLifecycle()
     val sorted = remember(allTracks, sort) { vm.sortedTracks(sort) }
+    val listState = rememberLazyListState()
 
     // ---- Single-track actions ----
     var sheetTrack by remember { mutableStateOf<Track?>(null) }
@@ -107,23 +112,39 @@ fun TracksScreen(
                 // isn't offered — see SortHeader's `options` doc comment.
                 options = TRACKS_TAB_SORT_OPTIONS,
             )
-            LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 160.dp)) {
-                items(sorted, key = { it.id }) { track ->
-                    val selected = track.id in selectedIds
-                    TrackRow(
-                        track = track,
-                        selectionMode = selectionMode,
-                        selected = selected,
-                        onLongClick = { toggleSelected(track.id) },
-                        onClick = {
-                            if (selectionMode) {
-                                toggleSelected(track.id)
-                            } else {
-                                player.playQueue(sorted, sorted.indexOf(track), "All tracks")
-                                onOpenNowPlaying()
-                            }
-                        },
-                        onMore = { sheetTrack = track },
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                LazyColumn(
+                    state = listState,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 160.dp),
+                ) {
+                    items(sorted, key = { it.id }) { track ->
+                        val selected = track.id in selectedIds
+                        TrackRow(
+                            track = track,
+                            selectionMode = selectionMode,
+                            selected = selected,
+                            onLongClick = { toggleSelected(track.id) },
+                            onClick = {
+                                if (selectionMode) {
+                                    toggleSelected(track.id)
+                                } else {
+                                    player.playQueue(sorted, sorted.indexOf(track), "All tracks")
+                                    onOpenNowPlaying()
+                                }
+                            },
+                            onMore = { sheetTrack = track },
+                        )
+                    }
+                }
+
+                // A–Z fast-scroll bar, only while sorted by name. Hidden in selection
+                // mode so it never competes with the selection action bar.
+                if (sort == SortOption.NAME && !selectionMode && sorted.isNotEmpty()) {
+                    AlphabetScrollbar(
+                        tracks = sorted,
+                        listState = listState,
+                        // Bottom inset matches the list's padding so the bar clears the mini player.
+                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, bottom = 160.dp, end = 2.dp),
                     )
                 }
             }
