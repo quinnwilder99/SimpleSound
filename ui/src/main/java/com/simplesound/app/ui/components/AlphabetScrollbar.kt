@@ -11,7 +11,9 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
@@ -37,6 +39,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.simplesound.app.data.model.Track
@@ -49,7 +52,21 @@ private val BUBBLE_GAP = 12.dp
 
 /** Vertical room each visible letter (plus the dot after it) needs on the bar. */
 private val LABEL_PITCH = 44.dp
+
+/** The tightest the letters may pack when the bar is pushed short by [topInset]. */
+private val MIN_LABEL_PITCH = 22.dp
 private const val MAX_LABELS = 7
+
+/** [topInset] never squeezes the bar shorter than this. */
+private val MIN_BAR_HEIGHT = 160.dp
+
+/**
+ * Extra end padding for each list row while the bar is showing, so the rows'
+ * cards stop just short of it instead of running underneath. With the bar's
+ * 2.dp edge gap and TrackRow's own 12.dp outer padding this leaves ~6.dp
+ * between card and bar.
+ */
+val AlphabetScrollbarRowEndInset = 20.dp
 
 /**
  * A slim "A to Z" fast-scroll bar for a name-sorted track list. It shows only a
@@ -61,6 +78,12 @@ private const val MAX_LABELS = 7
  *
  * Place it aligned to the end of a Box overlaying the list. Only the bar itself
  * takes touches; the bubble area beside it passes them through to the list.
+ *
+ * [topInset] pushes the bar's top edge down, e.g. to keep it below header items
+ * that scroll with the list. It is read live, so the bar can grow upward as the
+ * header scrolls away, but it is held still for the length of a drag so the
+ * letters never shift under the finger. The letter set is picked from the full
+ * height, so it stays the same while the bar resizes.
  */
 @Composable
 fun AlphabetScrollbar(
@@ -68,6 +91,7 @@ fun AlphabetScrollbar(
     listState: LazyListState,
     modifier: Modifier = Modifier,
     headerItemCount: Int = 0,
+    topInset: () -> Dp = { 0.dp },
 ) {
     val itemSlots = remember(tracks) { IntArray(tracks.size) { AlphabetIndex.slotOf(tracks[it].title) } }
     val slots = remember(itemSlots) { AlphabetIndex.barSlots(itemSlots) }
@@ -88,6 +112,7 @@ fun AlphabetScrollbar(
     var barHeightPx by remember { mutableIntStateOf(0) }
     var bubbleLabel by remember { mutableStateOf("") }
     var lastTarget by remember { mutableIntStateOf(-1) }
+    var heldTop by remember { mutableStateOf(0.dp) }
 
     fun onTouch(y: Float) {
         val list = currentTracks
@@ -107,49 +132,84 @@ fun AlphabetScrollbar(
         }
     }
 
-    Box(modifier.fillMaxHeight().width(BUBBLE_SIZE + BUBBLE_GAP + BAR_WIDTH)) {
-        LetterBubble(
-            visible = dragging,
-            label = bubbleLabel,
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .offset {
-                        val size = BUBBLE_SIZE.roundToPx()
-                        val maxY = (barHeightPx - size).coerceAtLeast(0)
-                        IntOffset(0, (touchY - size / 2f).roundToInt().coerceIn(0, maxY))
-                    },
-        )
+    BoxWithConstraints(modifier.fillMaxHeight().width(BUBBLE_SIZE + BUBBLE_GAP + BAR_WIDTH)) {
+        val fullHeight = maxHeight
+        val liveTop = topInset().coerceIn(0.dp, (fullHeight - MIN_BAR_HEIGHT).coerceAtLeast(0.dp))
+        val currentLiveTop by rememberUpdatedState(liveTop)
+        val top = if (dragging) heldTop else liveTop
+        val labelCount = labelCountFor(fullHeight, barHeight = fullHeight - top)
 
-        val tint = if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        BoxWithConstraints(
-            Modifier
-                .align(Alignment.TopEnd)
-                .fillMaxHeight()
-                .width(BAR_WIDTH)
-                // Keep gesture-nav's edge back swipe from stealing drags that start on the bar.
-                .systemGestureExclusion()
-                .onSizeChanged { barHeightPx = it.height }
-                .scrubGesture(
-                    onStart = {
-                        dragging = true
-                        lastTarget = -1
-                        bubbleLabel = ""
-                    },
-                    onMove = ::onTouch,
-                    onEnd = { dragging = false },
-                )
-                .liquidGlass(
-                    corner = BAR_WIDTH / 2,
-                    tint = tint,
-                    bodyAlpha = if (dragging) 0.16f else 0.06f,
-                    showGloss = false,
-                    showRim = dragging,
-                ),
-        ) {
-            val labelCount = (maxHeight / LABEL_PITCH).toInt().coerceIn(2, MAX_LABELS)
-            BarMarks(slots = slots, labelCount = labelCount, color = tint)
+        Box(Modifier.fillMaxSize().padding(top = top)) {
+            LetterBubble(
+                visible = dragging,
+                label = bubbleLabel,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .offset {
+                            val size = BUBBLE_SIZE.roundToPx()
+                            val maxY = (barHeightPx - size).coerceAtLeast(0)
+                            IntOffset(0, (touchY - size / 2f).roundToInt().coerceIn(0, maxY))
+                        },
+            )
+
+            ScrubBar(
+                dragging = dragging,
+                slots = slots,
+                labelCount = labelCount,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .onSizeChanged { barHeightPx = it.height }
+                        .scrubGesture(
+                            onStart = {
+                                heldTop = currentLiveTop
+                                dragging = true
+                                lastTarget = -1
+                                bubbleLabel = ""
+                            },
+                            onMove = ::onTouch,
+                            onEnd = { dragging = false },
+                        ),
+            )
         }
+    }
+}
+
+/**
+ * How many letters to show. Chosen from the full height so the set stays put
+ * while [topInset] resizes the bar, but packed no tighter than [MIN_LABEL_PITCH]
+ * on the bar's actual [barHeight].
+ */
+private fun labelCountFor(
+    fullHeight: Dp,
+    barHeight: Dp,
+): Int = minOf(fullHeight / LABEL_PITCH, barHeight / MIN_LABEL_PITCH).toInt().coerceIn(2, MAX_LABELS)
+
+/** The slim pill itself, showing the few letters. Touch handling comes in via [modifier]. */
+@Composable
+private fun ScrubBar(
+    dragging: Boolean,
+    slots: List<Int>,
+    labelCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    val tint = if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier
+            .fillMaxHeight()
+            .width(BAR_WIDTH)
+            // Keep gesture-nav's edge back swipe from stealing drags that start on the bar.
+            .systemGestureExclusion()
+            .liquidGlass(
+                corner = BAR_WIDTH / 2,
+                tint = tint,
+                bodyAlpha = if (dragging) 0.16f else 0.06f,
+                showGloss = false,
+                showRim = dragging,
+            ),
+    ) {
+        BarMarks(slots = slots, labelCount = labelCount, color = tint)
     }
 }
 

@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -67,6 +68,7 @@ import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
 import com.simplesound.app.ui.components.AlphabetScrollbar
+import com.simplesound.app.ui.components.AlphabetScrollbarRowEndInset
 import com.simplesound.app.ui.components.Artwork
 import com.simplesound.app.ui.components.CoverCropDialog
 import com.simplesound.app.ui.components.PlaylistSelectionActionBar
@@ -158,6 +160,7 @@ fun PlaylistDetailScreen(
     // ---- Drag-to-reorder (available while selection mode is active) ----
     val listState = rememberLazyListState()
     val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
     val reorderState =
         rememberReorderableLazyListState(listState) { from, to ->
             val fromIndex = from.index - PLAYLIST_HEADER_ITEMS
@@ -177,6 +180,14 @@ fun PlaylistDetailScreen(
     // ---- Multi-track selection state ----
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     val selectionMode = selectedIds.isNotEmpty()
+
+    // The A–Z bar shows only while sorted by name and outside selection mode;
+    // rows then pull their cards in from the right so the bar never sits on them.
+    val showAlphabetBar = sort == SortOption.NAME && !selectionMode && tracks.isNotEmpty()
+    val rowEndInset by animateDpAsState(
+        targetValue = if (showAlphabetBar) AlphabetScrollbarRowEndInset else 0.dp,
+        label = "alphabet-row-inset",
+    )
     var showAddMany by remember { mutableStateOf(false) }
     var showRemoveMany by remember { mutableStateOf(false) }
 
@@ -358,6 +369,7 @@ fun PlaylistDetailScreen(
                             track = track,
                             modifier =
                                 Modifier
+                                    .padding(end = rowEndInset)
                                     .shadow(lift, RoundedCornerShape(20.dp))
                                     .graphicsLayer { rotationZ = wiggle },
                             handleModifier =
@@ -401,11 +413,21 @@ fun PlaylistDetailScreen(
             // A–Z fast-scroll bar, only while sorted by name. Hidden in selection
             // mode, where the rows' drag handles and the action bar take over (and a
             // drag-reorder switches the sort to Custom order anyway).
-            if (sort == SortOption.NAME && !selectionMode && tracks.isNotEmpty()) {
+            if (showAlphabetBar) {
                 AlphabetScrollbar(
                     tracks = tracks,
                     listState = listState,
                     headerItemCount = PLAYLIST_HEADER_ITEMS,
+                    // Start just below the sort header (as on the Tracks tab) rather
+                    // than over the cover card; once the header scrolls off, the bar
+                    // grows up to the top of the list.
+                    topInset = {
+                        val sortHeader =
+                            listState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == PLAYLIST_HEADER_ITEMS - 1 }
+                        val bottomPx = sortHeader?.let { it.offset + it.size } ?: 0
+                        with(density) { bottomPx.coerceAtLeast(0).toDp() }
+                    },
                     // Bottom inset matches the list's padding so the bar clears the mini player.
                     modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, bottom = 160.dp, end = 2.dp),
                 )

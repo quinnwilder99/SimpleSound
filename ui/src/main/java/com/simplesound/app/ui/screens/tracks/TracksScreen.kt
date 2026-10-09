@@ -1,5 +1,6 @@
 ﻿package com.simplesound.app.ui.screens.tracks
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +28,7 @@ import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
 import com.simplesound.app.ui.components.AlphabetScrollbar
+import com.simplesound.app.ui.components.AlphabetScrollbarRowEndInset
 import com.simplesound.app.ui.components.SelectionActionBar
 import com.simplesound.app.ui.components.SortHeader
 import com.simplesound.app.ui.components.TrackActionsSheet
@@ -64,6 +66,14 @@ fun TracksScreen(
     // ---- Multi-selection state ----
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     val selectionMode = selectedIds.isNotEmpty()
+
+    // The A–Z bar shows only while sorted by name and outside selection mode;
+    // rows then pull their cards in from the right so the bar never sits on them.
+    val showAlphabetBar = sort == SortOption.NAME && !selectionMode && sorted.isNotEmpty()
+    val rowEndInset by animateDpAsState(
+        targetValue = if (showAlphabetBar) AlphabetScrollbarRowEndInset else 0.dp,
+        label = "alphabet-row-inset",
+    )
     var showAddMany by remember { mutableStateOf(false) }
 
     val selectedTracks: List<Track> =
@@ -121,6 +131,7 @@ fun TracksScreen(
                         val selected = track.id in selectedIds
                         TrackRow(
                             track = track,
+                            modifier = Modifier.padding(end = rowEndInset),
                             selectionMode = selectionMode,
                             selected = selected,
                             onLongClick = { toggleSelected(track.id) },
@@ -139,7 +150,7 @@ fun TracksScreen(
 
                 // A–Z fast-scroll bar, only while sorted by name. Hidden in selection
                 // mode so it never competes with the selection action bar.
-                if (sort == SortOption.NAME && !selectionMode && sorted.isNotEmpty()) {
+                if (showAlphabetBar) {
                     AlphabetScrollbar(
                         tracks = sorted,
                         listState = listState,
