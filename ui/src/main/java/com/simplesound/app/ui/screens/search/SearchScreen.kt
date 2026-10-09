@@ -48,7 +48,9 @@ import com.simplesound.app.ui.components.SelectionActionBar
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
+import com.simplesound.app.ui.components.TrackTagEditor
 import com.simplesound.app.ui.components.rememberTrackDeleter
+import com.simplesound.app.ui.components.rememberTrackTagEditor
 import com.simplesound.app.util.shareTrack
 
 /**
@@ -99,6 +101,7 @@ fun SearchScreen(
     }
 
     val deleter = rememberTrackDeleter(vm, onDeleted = { deleted -> selectedIds = selectedIds - deleted })
+    val tagEditor = rememberTrackTagEditor(vm)
     val allSelected = results.isNotEmpty() && selectedIds.size == results.size
 
     fun toggleSelectAll() {
@@ -117,6 +120,7 @@ fun SearchScreen(
             addTrack != null ||
             detailsTrack != null ||
             deleter.isConfirming ||
+            tagEditor.isOpen ||
             showAddMany
     LaunchedEffect(anyOverlayOpen) {
         vm.setMiniPlayerHidden(anyOverlayOpen)
@@ -271,6 +275,15 @@ fun SearchScreen(
                 sheetTrack = null
             },
             onDismiss = { sheetTrack = null },
+            onEditTags =
+                if (TrackTagEditor.canEdit(t)) {
+                    {
+                        sheetTrack = null
+                        tagEditor.open(t)
+                    }
+                } else {
+                    null
+                },
         )
     }
 

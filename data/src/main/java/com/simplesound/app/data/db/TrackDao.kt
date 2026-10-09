@@ -40,4 +40,13 @@ interface TrackDao {
     /** Callers must keep [ids] under SQLite's bound-variable limit (see MusicRepository.IN_CHUNK). */
     @Query("DELETE FROM tracks WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<Long>)
+
+    /** Title/artist/album after the user edited the file's tags (see MusicRepository.updateTrackTags). */
+    @Query("UPDATE tracks SET title = :title, artist = :artist, album = :album WHERE id = :id")
+    suspend fun updateTags(
+        id: Long,
+        title: String,
+        artist: String,
+        album: String,
+    )
 }

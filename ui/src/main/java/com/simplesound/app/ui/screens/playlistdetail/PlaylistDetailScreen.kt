@@ -77,7 +77,9 @@ import com.simplesound.app.ui.components.RemoveTracksDialog
 import com.simplesound.app.ui.components.SortHeader
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
+import com.simplesound.app.ui.components.TrackTagEditor
 import com.simplesound.app.ui.components.liquidGlass
+import com.simplesound.app.ui.components.rememberTrackTagEditor
 import com.simplesound.app.util.CoverImageStore
 import com.simplesound.app.util.shareTracks
 import com.simplesound.app.util.trackCountLabel
@@ -195,6 +197,7 @@ fun PlaylistDetailScreen(
     var sheetTrack by remember { mutableStateOf<Track?>(null) }
     var addOneTrack by remember { mutableStateOf<Track?>(null) }
     var detailsTrack by remember { mutableStateOf<Track?>(null) }
+    val tagEditor = rememberTrackTagEditor(vm)
 
     val selectedTracks: List<Track> =
         remember(selectedIds, tracks) {
@@ -510,7 +513,7 @@ fun PlaylistDetailScreen(
         )
     }
 
-    // ---- Single-track "more" sheet: Add / Remove / Track details ----
+    // ---- Single-track "more" sheet: Add / Remove / Edit tags / Track details ----
     sheetTrack?.let { t ->
         PlaylistTrackActionsSheet(
             track = t,
@@ -525,6 +528,15 @@ fun PlaylistDetailScreen(
             },
             onDismiss = { sheetTrack = null },
             removeEnabled = editable,
+            onEditTags =
+                if (TrackTagEditor.canEdit(t)) {
+                    {
+                        sheetTrack = null
+                        tagEditor.open(t)
+                    }
+                } else {
+                    null
+                },
         )
     }
 

@@ -34,7 +34,9 @@ import com.simplesound.app.ui.components.SortHeader
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
 import com.simplesound.app.ui.components.TrackRow
+import com.simplesound.app.ui.components.TrackTagEditor
 import com.simplesound.app.ui.components.rememberTrackDeleter
+import com.simplesound.app.ui.components.rememberTrackTagEditor
 import com.simplesound.app.util.shareTrack
 
 /** Sort options offered for the flat Tracks list, i.e. everything except
@@ -91,6 +93,7 @@ fun TracksScreen(
     }
 
     val deleter = rememberTrackDeleter(vm, onDeleted = { deleted -> selectedIds = selectedIds - deleted })
+    val tagEditor = rememberTrackTagEditor(vm)
 
     // Temporarily hide the global persistent mini player while the bottom
     // selection action bar or any modal sheet/dialog is open, so it can't
@@ -100,6 +103,7 @@ fun TracksScreen(
             sheetTrack != null ||
             addTrack != null ||
             deleter.isConfirming ||
+            tagEditor.isOpen ||
             detailsTrack != null ||
             showAddMany
     LaunchedEffect(anyOverlayOpen) {
@@ -201,6 +205,15 @@ fun TracksScreen(
                 sheetTrack = null
             },
             onDismiss = { sheetTrack = null },
+            onEditTags =
+                if (TrackTagEditor.canEdit(t)) {
+                    {
+                        sheetTrack = null
+                        tagEditor.open(t)
+                    }
+                } else {
+                    null
+                },
         )
     }
 

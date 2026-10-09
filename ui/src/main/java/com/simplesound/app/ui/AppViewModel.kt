@@ -218,6 +218,13 @@ class AppViewModel
 
         fun deleteTracks(trackIds: List<Long>) = repository.deleteTracks(trackIds)
 
+        fun updateTrackTags(
+            trackId: Long,
+            title: String,
+            artist: String,
+            album: String,
+        ) = repository.updateTrackTags(trackId, title, artist, album)
+
         fun reorderPlaylists(orderedIds: List<String>) = repository.reorderPlaylists(orderedIds)
 
         fun reorderFavoritePlaylists(orderedIds: List<String>) = repository.reorderFavoritePlaylists(orderedIds)

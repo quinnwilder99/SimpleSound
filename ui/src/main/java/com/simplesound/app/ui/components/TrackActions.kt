@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Info
@@ -49,6 +50,7 @@ fun TrackActionsSheet(
     onShare: () -> Unit,
     onDetails: () -> Unit,
     onDismiss: () -> Unit,
+    onEditTags: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
@@ -74,6 +76,7 @@ fun TrackActionsSheet(
                 onShare()
                 onDismiss()
             }
+            onEditTags?.let { SheetItem(Icons.Rounded.Edit, "Edit tags") { it() } }
             SheetItem(Icons.Rounded.Info, "Track details") { onDetails() }
             SheetItem(Icons.Rounded.Delete, "Delete", destructive = true) { onDelete() }
         }
@@ -83,9 +86,10 @@ fun TrackActionsSheet(
 /**
  * Compact bottom sheet for a single track inside a user-created playlist.
  *
- * Shows only the three context-appropriate actions:
+ * Shows only the context-appropriate actions:
  *  - **Add** — add this specific track to another playlist
  *  - **Remove** — remove this specific track from the current playlist
+ *  - **Edit tags** — rename the track inside its file (MP3 only)
  *  - **Track details** — show detailed metadata
  *
  * Unlike the general [TrackActionsSheet], this intentionally has no
@@ -101,6 +105,7 @@ fun PlaylistTrackActionsSheet(
     onDetails: () -> Unit,
     onDismiss: () -> Unit,
     removeEnabled: Boolean = true,
+    onEditTags: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
@@ -120,6 +125,7 @@ fun PlaylistTrackActionsSheet(
                     onDismiss()
                 }
             }
+            onEditTags?.let { SheetItem(Icons.Rounded.Edit, "Edit tags") { it() } }
             SheetItem(Icons.Rounded.Info, "Track details") { onDetails() }
         }
     }

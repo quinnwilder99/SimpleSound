@@ -309,6 +309,23 @@ class PlayerController
             }
         }
 
+        /**
+         * Swaps in [track]'s new title/artist/album (after a tag edit) everywhere it is
+         * queued, including the notification. Same URI, so ExoPlayer updates the item
+         * in place rather than re-preparing it -- playback isn't interrupted.
+         */
+        fun refreshTrackMetadata(track: Track) {
+            _queue.value = _queue.value.map { if (it.id == track.id) track else it }
+            if (_currentTrack.value?.id == track.id) _currentTrack.value = track
+            if (_lastPlayedTrack.value?.id == track.id) _lastPlayedTrack.value = track
+            withController { c ->
+                val mediaId = track.id.toString()
+                for (i in 0 until c.mediaItemCount) {
+                    if (c.getMediaItemAt(i).mediaId == mediaId) c.replaceMediaItem(i, track.toMediaItem())
+                }
+            }
+        }
+
         fun seekTo(positionMs: Long) {
             val pos = positionMs.coerceAtLeast(0)
             _positionMs.value = pos

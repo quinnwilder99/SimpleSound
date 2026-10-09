@@ -74,7 +74,9 @@ import com.simplesound.app.ui.components.Artwork
 import com.simplesound.app.ui.components.QueueSheet
 import com.simplesound.app.ui.components.TrackActionsSheet
 import com.simplesound.app.ui.components.TrackDetailsDialog
+import com.simplesound.app.ui.components.TrackTagEditor
 import com.simplesound.app.ui.components.rememberTrackDeleter
+import com.simplesound.app.ui.components.rememberTrackTagEditor
 import com.simplesound.app.util.formatDuration
 import com.simplesound.app.util.shareTrack
 
@@ -109,6 +111,7 @@ fun NowPlayingScreen(
     var showActionsSheet by remember { mutableStateOf(false) }
     // The deleter also drops the track from the live queue; leave Now Playing afterwards.
     val deleter = rememberTrackDeleter(vm, onDeleted = { onBack() })
+    val tagEditor = rememberTrackTagEditor(vm)
     var detailsTrack by remember { mutableStateOf(false) }
     var showSpeedSheet by remember { mutableStateOf(false) }
     var seekingValue by remember { mutableStateOf<Float?>(null) }
@@ -379,6 +382,15 @@ fun NowPlayingScreen(
                 detailsTrack = true
             },
             onDismiss = { showActionsSheet = false },
+            onEditTags =
+                if (TrackTagEditor.canEdit(current)) {
+                    {
+                        showActionsSheet = false
+                        tagEditor.open(current)
+                    }
+                } else {
+                    null
+                },
         )
     }
     if (detailsTrack && current != null) {

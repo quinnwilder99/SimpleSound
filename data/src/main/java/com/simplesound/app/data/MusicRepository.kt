@@ -914,6 +914,29 @@ class MusicRepository
             }
         }
 
+        /**
+         * Reflect tags the user just wrote into a track's file (see TrackTagWriter)
+         * without waiting for MediaStore to rescan it. The rescan's own sync then
+         * arrives with the same values.
+         */
+        fun updateTrackTags(
+            trackId: Long,
+            title: String,
+            artist: String,
+            album: String,
+        ): Track? {
+            var updated: Track? = null
+            synchronized(lock) {
+                val current = tracksById[trackId] ?: return null
+                val copy = current.copy(title = title, artist = artist, album = album)
+                setTracksLocked(_tracks.value.map { if (it.id == trackId) copy else it })
+                updated = tracksById[trackId]
+                publishLocked()
+            }
+            write { trackDao.updateTags(trackId, title, artist, album) }
+            return updated
+        }
+
         /** Persist a custom drag-reorder of the user playlists. */
         fun reorderPlaylists(orderedIds: List<String>) {
             synchronized(lock) {
