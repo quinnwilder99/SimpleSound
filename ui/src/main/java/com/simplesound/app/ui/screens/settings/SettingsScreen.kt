@@ -86,7 +86,7 @@ fun SettingsScreen(
                     horizontal = 20.dp,
                     vertical = 8.dp,
                 ),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // ---- Accent color ----
             item {
@@ -167,7 +167,7 @@ private fun SettingsRow(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 16.dp),
+                .padding(horizontal = 20.dp, vertical = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
