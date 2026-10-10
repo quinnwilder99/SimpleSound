@@ -89,7 +89,7 @@ fun AboutScreen(onBack: () -> Unit) {
                     .padding(inner)
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 160.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
@@ -116,7 +116,7 @@ fun AboutScreen(onBack: () -> Unit) {
 
             Text(
                 text =
-                    "simpleSOUND is a personal project built to create a clean, " +
+                    "Simple Sound is a personal project built to create a clean, " +
                         "focused music player without the clutter of modern streaming apps.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
