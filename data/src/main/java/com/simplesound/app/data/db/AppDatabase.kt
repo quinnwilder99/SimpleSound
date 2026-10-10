@@ -39,7 +39,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PlayStatsEntity::class,
         CustomOrderEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -74,10 +74,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
 
         /**
+         * v2 -> v3: `playlists` gains `createdAt` for the Playlists tab's "Date added"
+         * sort. Nothing before this version could drag-reorder playlists, so every
+         * existing `position` is still the order the playlists were created in;
+         * `position + 1` is stored as their creation stamp. Those small numbers keep
+         * that order and sort as older than any real epoch-millis stamp a new
+         * playlist gets.
+         */
+        val MIGRATION_2_3 =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE `playlists` ADD COLUMN `createdAt` INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("UPDATE `playlists` SET `createdAt` = `position` + 1")
+                }
+            }
+
+        /**
          * Every schema migration, in order. Wired into the builder in [DatabaseModule].
          * Add to it per the checklist in this file's KDoc. Never remove or reorder an
          * entry once shipped.
          */
-        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
     }
 }

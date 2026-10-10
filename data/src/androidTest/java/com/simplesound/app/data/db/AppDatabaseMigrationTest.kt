@@ -28,7 +28,7 @@ class AppDatabaseMigrationTest {
     private val testDbName = "migration-test.db"
 
     // Bump in lockstep with @Database(version = ...) on AppDatabase.
-    private val latestVersion = 2
+    private val latestVersion = 3
 
     @get:Rule
     val helper =
@@ -84,6 +84,40 @@ class AppDatabaseMigrationTest {
         db.query("SELECT COUNT(*) FROM favorite_tracks").use { c ->
             c.moveToFirst()
             assertEquals(1, c.getInt(0))
+        }
+        db.query("SELECT COUNT(*) FROM playlist_track_cross_ref").use { c ->
+            c.moveToFirst()
+            assertEquals(1, c.getInt(0))
+        }
+        db.close()
+    }
+
+    @Test
+    @Throws(IOException::class)
+    fun migrate2To3BackfillsPlaylistCreationOrder() {
+        helper.createDatabase(testDbName, 2).apply {
+            execSQL(
+                "INSERT INTO playlists (id, name, coverUri, favorited, favoritedAt, position) " +
+                    "VALUES ('old', 'Old', NULL, 1, 55, 0), ('newer', 'Newer', 'file:///c.jpg', 0, 0, 1)",
+            )
+            execSQL("INSERT INTO playlist_track_cross_ref (playlistId, trackId, position) VALUES ('old', 7, 0)")
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(testDbName, 3, true, AppDatabase.MIGRATION_2_3)
+        val columns = "id, name, coverUri, favorited, favoritedAt, position, createdAt"
+        db.query("SELECT $columns FROM playlists ORDER BY id").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("newer", c.getString(0))
+            assertEquals("file:///c.jpg", c.getString(2))
+            assertEquals(1, c.getInt(5))
+            assertEquals(2L, c.getLong(6))
+            assertTrue(c.moveToNext())
+            assertEquals("old", c.getString(0))
+            assertEquals("Old", c.getString(1))
+            assertEquals(1, c.getInt(3))
+            assertEquals(55L, c.getLong(4))
+            assertEquals(1L, c.getLong(6))
         }
         db.query("SELECT COUNT(*) FROM playlist_track_cross_ref").use { c ->
             c.moveToFirst()

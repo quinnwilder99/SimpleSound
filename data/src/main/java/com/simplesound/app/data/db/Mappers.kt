@@ -41,6 +41,7 @@ fun PlaylistEntity.toDomain(trackIds: List<Long>): Playlist =
         coverUri = coverUri,
         favorited = favorited,
         favoritedAt = favoritedAt,
+        createdAt = createdAt,
     )
 
 fun Playlist.toEntity(position: Int): PlaylistEntity =
@@ -51,4 +52,5 @@ fun Playlist.toEntity(position: Int): PlaylistEntity =
         favorited = favorited,
         favoritedAt = favoritedAt,
         position = position,
+        createdAt = createdAt,
     )

@@ -10,8 +10,9 @@ import androidx.room.PrimaryKey
  * read, exactly as before this table existed.
  *
  * [position] is the user's drag-reordered position among their own playlists
- * (see `MusicRepository.reorderPlaylists`); track membership + order lives in
- * [PlaylistTrackCrossRef], not here.
+ * (see `MusicRepository.reorderPlaylists`) -- the Playlists tab's "Custom order",
+ * which the Favorites tab follows too. [createdAt] backs its "Date added" sort.
+ * Track membership + order lives in [PlaylistTrackCrossRef], not here.
  */
 @Entity(tableName = "playlists")
 data class PlaylistEntity(
@@ -21,4 +22,5 @@ data class PlaylistEntity(
     val favorited: Boolean,
     val favoritedAt: Long,
     val position: Int,
+    val createdAt: Long,
 )

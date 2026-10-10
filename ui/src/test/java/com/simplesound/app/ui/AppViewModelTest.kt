@@ -50,6 +50,7 @@ class AppViewModelTest {
                 every { accent } returns flowOf(AccentColor.Default)
                 every { tabSettings } returns flowOf(Tab.Default.map { TabSetting(it, true) })
                 every { tracksSort } returns flowOf(SortOption.DATE_ADDED)
+                every { playlistsTabSort } returns flowOf(SortOption.CUSTOM_ORDER)
                 every { crossfadeSeconds } returns flowOf(0)
             }
         repository =

@@ -136,51 +136,37 @@ class MusicRepositoryTest {
     }
 
     @Test
-    fun `toggleFavoritePlaylist orders the favorites tab by most-recently-hearted`() {
+    fun `favorites tab lists hearted playlists in custom order and follows a reorder`() {
         val first = repository.createPlaylist("First")
         val second = repository.createPlaylist("Second")
-        repository.toggleFavoritePlaylist(first)
-        // favoritedAt is a wall-clock millis stamp; a real user can't heart two
-        // playlists within the same millisecond, but a test can, so force the two
-        // timestamps apart to make the ordering assertion below deterministic.
-        Thread.sleep(5)
+        repository.createPlaylist("Not hearted")
         repository.toggleFavoritePlaylist(second)
+        repository.toggleFavoritePlaylist(first)
 
-        // Favorite tracks native playlist is always first; hearted user playlists
-        // follow, most-recently-hearted on top.
-        val names = repository.favoritesTabPlaylists.value.map { it.name }
-        assertEquals(listOf("Favorite tracks", "Second", "First"), names)
+        // Favorite tracks is always first; hearted playlists follow in the Playlists
+        // tab's custom order, not the order they were hearted in.
+        assertEquals(
+            listOf("Favorite tracks", "First", "Second"),
+            repository.favoritesTabPlaylists.value.map { it.name },
+        )
+
+        repository.reorderPlaylists(listOf(second, first))
+        assertEquals(
+            listOf("Favorite tracks", "Second", "First"),
+            repository.favoritesTabPlaylists.value.map { it.name },
+        )
     }
 
     @Test
-    fun `reorderFavoritePlaylists sets the favorites tab order, persists it, and new hearts still land on top`() =
+    fun `createPlaylist stamps createdAt and persists it`() =
         runTest {
-            val a = repository.createPlaylist("A")
-            val b = repository.createPlaylist("B")
-            val c = repository.createPlaylist("C")
-            val d = repository.createPlaylist("D")
-            repository.toggleFavoritePlaylist(a)
-            repository.toggleFavoritePlaylist(b)
-            repository.toggleFavoritePlaylist(c)
-            // Same-millisecond hearts are possible in a test; the reorder must still be strict.
-
-            repository.reorderFavoritePlaylists(listOf(a, c, b))
-            assertEquals(
-                listOf("Favorite tracks", "A", "C", "B"),
-                repository.favoritesTabPlaylists.value.map { it.name },
-            )
+            val before = System.currentTimeMillis()
+            val id = repository.createPlaylist("New")
+            val createdAt = repository.playlistById(id)!!.createdAt
+            assertTrue(createdAt >= before)
 
             repository.awaitPendingWrites()
-            val persisted =
-                db.playlistDao().getAll().filter { it.favorited }.sortedByDescending { it.favoritedAt }.map { it.id }
-            assertEquals(listOf(a, c, b), persisted)
-
-            Thread.sleep(5)
-            repository.toggleFavoritePlaylist(d)
-            assertEquals(
-                listOf("Favorite tracks", "D", "A", "C", "B"),
-                repository.favoritesTabPlaylists.value.map { it.name },
-            )
+            assertEquals(createdAt, db.playlistDao().getAll().single { it.id == id }.createdAt)
         }
 
     @Test
