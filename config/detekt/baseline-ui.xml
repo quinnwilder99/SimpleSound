@@ -7,7 +7,7 @@
     <ID>CyclomaticComplexMethod:PlaylistDetailScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun PlaylistDetailScreen( vm: AppViewModel, playlistId: String, onBack: () -&gt; Unit, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
     <ID>CyclomaticComplexMethod:SearchScreen.kt$@Composable fun SearchScreen( vm: AppViewModel, onBack: () -&gt; Unit, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
     <ID>CyclomaticComplexMethod:SleepTimerScreen.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun SleepTimerScreen(onBack: () -&gt; Unit)</ID>
-    <ID>CyclomaticComplexMethod:TracksScreen.kt$@Composable fun TracksScreen( vm: AppViewModel, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
+    <ID>CyclomaticComplexMethod:TracksScreen.kt$@Composable fun TracksScreen( vm: AppViewModel, onOpenNowPlaying: () -&gt; Unit = {}, active: Boolean = true, )</ID>
     <ID>ExplicitItLambdaParameter:ManageTabsScreen.kt${ _, it -&gt; it.tab.name }</ID>
     <ID>FunctionNaming:HomeScreen.kt$@Composable fun HomeScreen( vm: AppViewModel, navController: NavHostController, )</ID>
     <ID>FunctionNaming:HomeScreen.kt$@Composable private fun CreatePlaylistDialog( onConfirm: (String) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
@@ -18,7 +18,7 @@
     <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun RemoveTracksDialog( count: Int, onConfirm: () -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
     <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun SelectionActionBar( selectedCount: Int, onPlay: () -&gt; Unit, onAdd: () -&gt; Unit, onDelete: () -&gt; Unit, onClear: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
     <ID>FunctionNaming:MultiSelectionActions.kt$@Composable private fun BarAction( icon: ImageVector, label: String, onClick: () -&gt; Unit, destructive: Boolean = false, enabled: Boolean = true, )</ID>
-    <ID>FunctionNaming:TracksScreen.kt$@Composable fun TracksScreen( vm: AppViewModel, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
+    <ID>FunctionNaming:TracksScreen.kt$@Composable fun TracksScreen( vm: AppViewModel, onOpenNowPlaying: () -&gt; Unit = {}, active: Boolean = true, )</ID>
     <ID>LongMethod:AboutScreen.kt$@Composable fun AboutScreen(onBack: () -&gt; Unit)</ID>
     <ID>LongMethod:AccentColorScreen.kt$@Composable fun AccentColorScreen( vm: AppViewModel, onBack: () -&gt; Unit, )</ID>
     <ID>LongMethod:CrossfadeScreen.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun CrossfadeScreen( vm: AppViewModel, onBack: () -&gt; Unit, )</ID>
@@ -39,7 +39,7 @@
     <ID>LongMethod:SimpleSoundNavHost.kt$@Composable fun SimpleSoundNavHost( vm: AppViewModel, navController: NavHostController = rememberNavController(), )</ID>
     <ID>LongMethod:SleepTimerScreen.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun SleepTimerScreen(onBack: () -&gt; Unit)</ID>
     <ID>LongMethod:TrackRow.kt$@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class) @Composable fun TrackRow( track: Track, onClick: () -&gt; Unit, onMore: () -&gt; Unit, modifier: Modifier = Modifier, selectionMode: Boolean = false, selected: Boolean = false, onLongClick: () -&gt; Unit = {}, handleModifier: Modifier = Modifier, )</ID>
-    <ID>LongMethod:TracksScreen.kt$@Composable fun TracksScreen( vm: AppViewModel, onOpenNowPlaying: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:TracksScreen.kt$@Composable fun TracksScreen( vm: AppViewModel, onOpenNowPlaying: () -&gt; Unit = {}, active: Boolean = true, )</ID>
     <ID>LongParameterList:LockControlScreen.kt$( state: LockScreenPlaybackState, side: EdgeBarSide, onDismiss: () -&gt; Unit, onPlayPause: () -&gt; Unit, onNext: () -&gt; Unit, onPrevious: () -&gt; Unit, )</ID>
     <ID>LongParameterList:ManageTabsScreen.kt$( setting: TabSetting, canMoveUp: Boolean, canMoveDown: Boolean, onToggle: () -&gt; Unit, onMoveUp: () -&gt; Unit, onMoveDown: () -&gt; Unit, )</ID>
     <ID>LongParameterList:MultiSelectionActions.kt$( selectedCount: Int, onPlay: () -&gt; Unit, onAdd: () -&gt; Unit, onDelete: () -&gt; Unit, onClear: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>

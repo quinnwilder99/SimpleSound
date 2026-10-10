@@ -49,6 +49,7 @@ private val TRACKS_TAB_SORT_OPTIONS = SortOption.entries.filterNot { it == SortO
 fun TracksScreen(
     vm: AppViewModel,
     onOpenNowPlaying: () -> Unit = {},
+    active: Boolean = true,
 ) {
     val player = LocalPlayer.current
     val context = LocalContext.current
@@ -90,6 +91,13 @@ fun TracksScreen(
 
     fun clearSelection() {
         selectedIds = emptySet()
+    }
+
+    // The tab stays composed while another tab is showing, so leaving it has to
+    // drop the selection itself (it used to go with the disposed screen); otherwise
+    // the mini player would stay hidden behind an action bar nobody can see.
+    LaunchedEffect(active) {
+        if (!active) clearSelection()
     }
 
     val deleter = rememberTrackDeleter(vm, onDeleted = { deleted -> selectedIds = selectedIds - deleted })

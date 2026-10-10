@@ -325,8 +325,18 @@ fun PlaylistDetailScreen(
                     SortHeader(
                         current = sort,
                         onSort = { vm.setPlaylistSort(playlistId, it) },
-                        onShuffle = { if (tracks.isNotEmpty()) player.playQueue(tracks.shuffled(), 0, playlist.name) },
-                        onPlayAll = { if (tracks.isNotEmpty()) player.playQueue(tracks, 0, playlist.name) },
+                        onShuffle = {
+                            if (tracks.isNotEmpty()) {
+                                player.playQueue(tracks.shuffled(), 0, playlist.name)
+                                vm.setLastPlayedPlaylist(playlistId)
+                            }
+                        },
+                        onPlayAll = {
+                            if (tracks.isNotEmpty()) {
+                                player.playQueue(tracks, 0, playlist.name)
+                                vm.setLastPlayedPlaylist(playlistId)
+                            }
+                        },
                         // Custom order is only ever meaningful -- and only ever persisted
                         // via drag-to-reorder above -- for a real user playlist; offering
                         // it as a manually-selectable option on a computed playlist would
@@ -410,6 +420,7 @@ fun PlaylistDetailScreen(
                                     toggleSelected(track.id)
                                 } else {
                                     player.playQueue(tracks, index, playlist.name)
+                                    vm.setLastPlayedPlaylist(playlistId)
                                     onOpenNowPlaying()
                                 }
                             },
@@ -450,6 +461,7 @@ fun PlaylistDetailScreen(
                     if (selectedTracks.isNotEmpty()) {
                         // Play only the selected tracks as a temporary queue.
                         player.playQueue(selectedTracks, 0, playlist.name)
+                        vm.setLastPlayedPlaylist(playlistId)
                         onOpenNowPlaying()
                         clearSelection()
                     }

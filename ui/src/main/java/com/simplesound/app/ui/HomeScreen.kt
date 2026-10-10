@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +56,7 @@ import com.simplesound.app.ui.screens.favorites.FavoritesScreen
 import com.simplesound.app.ui.screens.folders.FoldersScreen
 import com.simplesound.app.ui.screens.playlists.PlaylistsScreen
 import com.simplesound.app.ui.screens.tracks.TracksScreen
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -70,6 +72,18 @@ fun HomeScreen(
 
     val pagerState = rememberPagerState(pageCount = { enabledTabs.size })
     val scope = rememberCoroutineScope()
+
+    // Keep every tab composed once built. By default the pager disposes a tab as it
+    // leaves the screen and rebuilds it from scratch on the way back, and that
+    // rebuild (80-110 ms on device) landed mid-slide as a visible hitch on every tab
+    // switch. Off at first so launch only builds the visible tab; the rest are built
+    // once, shortly after the first frame, before the user is likely to switch.
+    var keepAllTabs by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        delay(KEEP_TABS_DELAY_MS)
+        keepAllTabs = true
+    }
 
     val firstTabIndex =
         remember(enabledTabs) {
@@ -262,15 +276,17 @@ fun HomeScreen(
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = if (keepAllTabs) enabledTabs.size else 0,
                 ) { page ->
                     val tab = enabledTabs.getOrNull(page) ?: Tab.TRACKS
                     Box(Modifier.fillMaxSize()) {
                         when (tab) {
-                            Tab.FAVORITES -> FavoritesScreen(vm, navController)
+                            Tab.FAVORITES -> FavoritesScreen(vm, navController, active = pagerState.settledPage == page)
                             Tab.TRACKS ->
                                 TracksScreen(
                                     vm,
                                     onOpenNowPlaying = { navController.navigate(Routes.NOW_PLAYING) },
+                                    active = pagerState.settledPage == page,
                                 )
                             Tab.PLAYLISTS -> PlaylistsScreen(vm, navController)
                             Tab.ALBUMS -> AlbumsScreen(vm)
@@ -326,3 +342,5 @@ private fun CreatePlaylistDialog(
         },
     )
 }
+
+private const val KEEP_TABS_DELAY_MS = 500L
