@@ -57,6 +57,10 @@ class SettingsStore
             // own last-chosen sort, independent of the Tracks tab sort.
             val PLAYLIST_SORTS = stringPreferencesKey("playlist_sorts")
 
+            // The playlist the user last started playback from, so the Favorites
+            // carousel can open on it instead of always on "Favorite tracks".
+            val LAST_PLAYED_PLAYLIST = stringPreferencesKey("last_played_playlist")
+
             // Seconds of overlap between the outgoing and incoming track, Samsung
             // Music style. 0 (the default) means crossfade is off. Read directly by
             // PlaybackService, not just the UI layer, since the fade has to happen
@@ -99,6 +103,14 @@ class SettingsStore
             context.dataStore.data.map { prefs ->
                 (prefs[Keys.CROSSFADE_SECONDS] ?: 0).coerceIn(0, MAX_CROSSFADE_SECONDS)
             }
+
+        /** Id of the playlist playback was last started from, or null if none yet. */
+        val lastPlayedPlaylistId: Flow<String?> =
+            context.dataStore.data.map { prefs -> prefs[Keys.LAST_PLAYED_PLAYLIST] }
+
+        suspend fun setLastPlayedPlaylistId(playlistId: String) {
+            context.dataStore.edit { it[Keys.LAST_PLAYED_PLAYLIST] = playlistId }
+        }
 
         suspend fun setAccent(accent: AccentColor) {
             context.dataStore.edit { it[Keys.ACCENT] = accent.name }

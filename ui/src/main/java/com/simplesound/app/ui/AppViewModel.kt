@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -93,6 +94,12 @@ class AppViewModel
                 val (pinned, hearted) = tab.partition { it.kind != PlaylistKind.USER }
                 pinned + sortPlaylists(hearted, sort)
             }.stateIn(viewModelScope, SharingStarted.Eagerly, repository.favoritesTabPlaylists.value)
+
+        /** The playlist playback was last started from; the Favorites carousel opens on it. */
+        suspend fun lastPlayedPlaylistId(): String? = settings.lastPlayedPlaylistId.first()
+
+        fun setLastPlayedPlaylist(playlistId: String) =
+            viewModelScope.launch { settings.setLastPlayedPlaylistId(playlistId) }
 
         /**
          * Temporarily hide the global persistent mini player. Set to `true` by screens

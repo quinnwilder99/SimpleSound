@@ -35,6 +35,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -74,7 +75,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.sign
 
@@ -103,6 +106,7 @@ private val TitleBlock = 72.dp
 fun FavoritesScreen(
     vm: AppViewModel,
     navController: NavHostController,
+    active: Boolean = true,
 ) {
     val player = LocalPlayer.current
     val playlists by vm.favoritesTabPlaylists.collectAsStateWithLifecycle()
@@ -117,6 +121,7 @@ fun FavoritesScreen(
     val tagEditor = rememberTrackTagEditor(vm)
 
     SwapTicks(pagerState)
+    OpenOnLastPlayed(vm, pagerState)
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val carouselHeight = maxHeight * 0.5f
@@ -130,9 +135,10 @@ fun FavoritesScreen(
                 PlaylistCarousel(
                     playlists = playlists,
                     pagerState = pagerState,
-                    height = carouselHeight,
+                    tabActive = active,
                     onOpen = { navController.navigate(Routes.playlist(it.id)) },
                     onLongPress = { optionsFor = it },
+                    modifier = Modifier.height(carouselHeight),
                 )
             }
             if (playlist != null) {
@@ -143,6 +149,7 @@ fun FavoritesScreen(
                     pagerState = pagerState,
                     onPlay = { index ->
                         player.playQueue(tracks, index, playlist.name)
+                        vm.setLastPlayedPlaylist(playlist.id)
                         navController.navigate(Routes.NOW_PLAYING)
                     },
                     onMore = { sheetTrack = it },
@@ -199,15 +206,55 @@ private fun FavoriteSortHeader(
     sort: SortOption,
 ) {
     val player = LocalPlayer.current
+
+    fun play(queue: List<Track>) {
+        if (queue.isEmpty()) return
+        player.playQueue(queue, 0, playlist.name)
+        vm.setLastPlayedPlaylist(playlist.id)
+    }
     SortHeader(
         current = sort,
         onSort = { vm.setPlaylistSort(playlist.id, it) },
-        onShuffle = { if (tracks.isNotEmpty()) player.playQueue(tracks.shuffled(), 0, playlist.name) },
-        onPlayAll = { if (tracks.isNotEmpty()) player.playQueue(tracks, 0, playlist.name) },
+        onShuffle = { play(tracks.shuffled()) },
+        onPlayAll = { play(tracks) },
         // Custom order is only set by dragging, which only a user playlist allows.
         options = if (playlist.isEditable) SortOption.entries else SortOption.entries - SortOption.CUSTOM_ORDER,
     )
 }
+
+/**
+ * Opens the carousel on the playlist the user last played from rather than always on
+ * "Favorite tracks". Once per screen state (saveable, so a tab swipe or rotation keeps
+ * whatever the user has swiped to since). Falls back to the first cover if that
+ * playlist is gone or no longer hearted. The playlists load asynchronously at app
+ * start, so this waits briefly for the saved one to show up before giving up.
+ */
+@Composable
+private fun OpenOnLastPlayed(
+    vm: AppViewModel,
+    pagerState: PagerState,
+) {
+    var applied by rememberSaveable { mutableStateOf(false) }
+    if (applied) return
+    LaunchedEffect(Unit) {
+        val id = vm.lastPlayedPlaylistId()
+        if (id != null) {
+            withTimeoutOrNull(LAST_PLAYED_WAIT_MS) {
+                val page =
+                    vm.favoritesTabPlaylists
+                        .first { list -> list.any { pl -> pl.id == id } }
+                        .indexOfFirst { pl -> pl.id == id }
+                // The pager's page count follows the composed list, which can trail
+                // the flow by a frame; scrolling before it catches up would clamp.
+                snapshotFlow { pagerState.pageCount }.first { it > page }
+                if (page > 0) pagerState.scrollToPage(page)
+            }
+        }
+        applied = true
+    }
+}
+
+private const val LAST_PLAYED_WAIT_MS = 3_000L
 
 /** A light tick each time the centre cover changes, so a swipe feels like it clicks into place. */
 @Composable
@@ -277,20 +324,26 @@ private fun LazyListScope.trackItems(
  * drawing shrinks), so the whole strip left or right of the centre cover is a
  * "previous" / "next" button.
  */
+@Suppress("LongParameterList")
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PlaylistCarousel(
     playlists: List<Playlist>,
     pagerState: PagerState,
-    height: Dp,
+    tabActive: Boolean,
     onOpen: (Playlist) -> Unit,
     onLongPress: (Playlist) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    // A record only turns while music plays; paused, it holds its angle.
+    val isPlaying by LocalPlayer.current.isPlaying.collectAsStateWithLifecycle()
+    val spinning = tabActive && isPlaying
     // One soft spring for both a released swipe and a tapped neighbour, so the two
     // land with the same feel.
     val settle = spring<Float>(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)
 
-    BoxWithConstraints(Modifier.fillMaxWidth().height(height)) {
+    BoxWithConstraints(modifier.fillMaxWidth()) {
         val diameter = min(maxWidth * 0.6f, maxHeight - TitleBlock - 16.dp).coerceAtLeast(96.dp)
         val sidePadding = (maxWidth - diameter) / 2
 
@@ -312,14 +365,20 @@ private fun PlaylistCarousel(
                     // away (+ is to the right). Read at draw time, see CarouselCover.
                     offset = { (page - pagerState.currentPage) - pagerState.currentPageOffsetFraction },
                     diameter = diameter,
-                    onClick = {
-                        if (page == pagerState.currentPage) {
-                            onOpen(pl)
-                        } else {
-                            scope.launch { pagerState.animateScrollToPage(page, animationSpec = settle) }
-                        }
-                    },
-                    onLongClick = { if (page == pagerState.currentPage) onLongPress(pl) },
+                    spinning = spinning,
+                    modifier =
+                        Modifier.combinedClickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+                                if (page == pagerState.currentPage) {
+                                    onOpen(pl)
+                                } else {
+                                    scope.launch { pagerState.animateScrollToPage(page, animationSpec = settle) }
+                                }
+                            },
+                            onLongClick = { if (page == pagerState.currentPage) onLongPress(pl) },
+                        ),
                 )
             }
             CarouselTitle(playlists.getOrNull(pagerState.currentPage), pagerState)
@@ -327,27 +386,19 @@ private fun PlaylistCarousel(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CarouselCover(
     playlist: Playlist,
     offset: () -> Float,
     diameter: Dp,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    spinning: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        Modifier
-            .fillMaxSize()
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-                onLongClick = onLongClick,
-            ),
+        modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        val spin = rememberDiscSpin(offset)
+        val spin = rememberDiscSpin(offset, spinning)
         Box(
             Modifier
                 .size(diameter)
@@ -385,9 +436,16 @@ private const val DISC_SECONDS_PER_TURN = 10f
  * so spinning redraws the cover but never recomposes it.
  */
 @Composable
-private fun rememberDiscSpin(offset: () -> Float): MutableFloatState {
+private fun rememberDiscSpin(
+    offset: () -> Float,
+    spinning: Boolean,
+): MutableFloatState {
     val angle = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) {
+    // The frame loop asks for a new frame every vsync, so it must stop while the
+    // Favorites tab is off-screen (it stays composed then; see HomeScreen) or the
+    // whole app would keep redrawing at full refresh rate from any tab.
+    LaunchedEffect(spinning) {
+        if (!spinning) return@LaunchedEffect
         var last = 0L
         while (true) {
             withFrameNanos { now ->
@@ -489,8 +547,14 @@ private fun FavoriteOptionsSheet(
     val player = LocalPlayer.current
     PlaylistOptionsSheet(
         playlist = playlist,
-        onPlay = { player.playQueue(vm.tracksByIds(playlist.trackIds), 0) },
-        onAdd = { player.playQueue(vm.tracksByIds(playlist.trackIds), 0) },
+        onPlay = {
+            player.playQueue(vm.tracksByIds(playlist.trackIds), 0)
+            vm.setLastPlayedPlaylist(playlist.id)
+        },
+        onAdd = {
+            player.playQueue(vm.tracksByIds(playlist.trackIds), 0)
+            vm.setLastPlayedPlaylist(playlist.id)
+        },
         onShare = {
             val send =
                 Intent(Intent.ACTION_SEND).apply {
