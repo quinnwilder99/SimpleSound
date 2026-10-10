@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -66,6 +67,7 @@ import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
 import com.simplesound.app.ui.components.AddToPlaylistDialog
+import com.simplesound.app.ui.components.AddTracksPickerDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
 import com.simplesound.app.ui.components.AlphabetScrollbar
 import com.simplesound.app.ui.components.AlphabetScrollbarRowEndInset
@@ -178,6 +180,7 @@ fun PlaylistDetailScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    var showTrackPicker by remember { mutableStateOf(false) }
 
     // ---- Multi-track selection state ----
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
@@ -245,6 +248,9 @@ fun PlaylistDetailScreen(
                 },
                 actions = {
                     if (editable) {
+                        IconButton(onClick = { showTrackPicker = true }) {
+                            Icon(Icons.Rounded.Add, "Add tracks", tint = MaterialTheme.colorScheme.primary)
+                        }
                         IconButton(onClick = { vm.toggleFavoritePlaylist(playlistId) }) {
                             Icon(
                                 if (playlist.favorited) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -478,6 +484,20 @@ fun PlaylistDetailScreen(
                 onBack()
             },
             onDismiss = { deleting = false },
+        )
+    }
+
+    // ---- "+": pick library tracks to add to this playlist ----
+    if (showTrackPicker && editable) {
+        AddTracksPickerDialog(
+            playlistName = playlist.name,
+            alreadyInPlaylist = playlist.trackIds.toSet(),
+            search = vm::searchTracks,
+            onAdd = { ids ->
+                vm.addTracksToPlaylist(playlistId, ids)
+                showTrackPicker = false
+            },
+            onDismiss = { showTrackPicker = false },
         )
     }
 
