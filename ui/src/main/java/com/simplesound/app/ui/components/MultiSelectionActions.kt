@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -183,16 +184,21 @@ private fun BarAction(
     }
 }
 
+/**
+ * Add the picked tracks to one or more playlists. Rows are checkboxes so several
+ * playlists can be ticked and filled in one go; nothing is written until "Add".
+ */
 @Composable
 fun AddTracksToPlaylistDialog(
     playlists: List<Playlist>,
     pickedCount: Int,
-    onAddToExisting: (Playlist) -> Unit,
+    onAddToExisting: (List<Playlist>) -> Unit,
     onCreateNew: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var newMode by remember { mutableStateOf(playlists.isEmpty()) }
     var newName by remember { mutableStateOf("") }
+    var checkedIds by remember { mutableStateOf(emptySet<String>()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -201,7 +207,13 @@ fun AddTracksToPlaylistDialog(
                     if (newName.isNotBlank()) onCreateNew(newName.trim())
                 }, enabled = newName.isNotBlank()) { Text("Create & add") }
             } else {
-                TextButton(onClick = { newMode = true }) { Text("New playlist") }
+                Row {
+                    TextButton(onClick = { newMode = true }) { Text("New playlist") }
+                    TextButton(
+                        onClick = { onAddToExisting(playlists.filter { it.id in checkedIds }) },
+                        enabled = checkedIds.isNotEmpty(),
+                    ) { Text(addLabel(checkedIds.size)) }
+                }
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
@@ -211,41 +223,49 @@ fun AddTracksToPlaylistDialog(
                 OutlinedTextField(value = newName, onValueChange = {
                     newName = it
                 }, singleLine = true, label = { Text("Playlist name") })
-            } else if (playlists.isEmpty()) {
-                Column {
-                    Text("No playlists yet. Create one to add these tracks.")
-                    Spacer(Modifier.size(8.dp))
-                    OutlinedTextField(value = newName, onValueChange = {
-                        newName = it
-                    }, singleLine = true, label = { Text("Playlist name") })
-                }
             } else {
-                LazyColumn {
-                    items(playlists) { pl ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable {
-                                onAddToExisting(pl)
-                            }.padding(vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    pl.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                )
-                                Text(
-                                    trackCountLabel(pl.trackCount),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
+                PlaylistCheckList(
+                    playlists = playlists,
+                    checkedIds = checkedIds,
+                    onToggle = { id -> checkedIds = if (id in checkedIds) checkedIds - id else checkedIds + id },
+                )
             }
         },
     )
+}
+
+internal fun addLabel(checkedCount: Int): String = if (checkedCount > 1) "Add to $checkedCount" else "Add"
+
+/** Checkbox list of playlists, shared by the single- and multi-track add dialogs. */
+@Composable
+internal fun PlaylistCheckList(
+    playlists: List<Playlist>,
+    checkedIds: Set<String>,
+    onToggle: (String) -> Unit,
+) {
+    LazyColumn {
+        items(playlists, key = { it.id }) { pl ->
+            Row(
+                Modifier.fillMaxWidth().clickable { onToggle(pl.id) }.padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = pl.id in checkedIds, onCheckedChange = { onToggle(pl.id) })
+                Spacer(Modifier.width(4.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        pl.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    Text(
+                        trackCountLabel(pl.trackCount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

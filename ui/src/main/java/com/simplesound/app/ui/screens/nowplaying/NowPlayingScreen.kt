@@ -355,8 +355,8 @@ fun NowPlayingScreen(
     if (showAddDialog && current != null) {
         AddToPlaylistDialog(
             playlists = userPlaylists,
-            onPick = { pl ->
-                vm.addTracksToPlaylist(pl.id, listOf(current.id))
+            onPick = { picked ->
+                picked.forEach { pl -> vm.addTracksToPlaylist(pl.id, listOf(current.id)) }
                 showAddDialog = false
             },
             onDismiss = { showAddDialog = false },

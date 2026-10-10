@@ -486,8 +486,8 @@ fun PlaylistDetailScreen(
         AddTracksToPlaylistDialog(
             playlists = userPlaylists,
             pickedCount = selectedIds.size,
-            onAddToExisting = { pl ->
-                vm.addTracksToPlaylist(pl.id, selectedIds.toList())
+            onAddToExisting = { picked ->
+                picked.forEach { pl -> vm.addTracksToPlaylist(pl.id, selectedIds.toList()) }
                 clearSelection()
                 showAddMany = false
             },
@@ -544,8 +544,8 @@ fun PlaylistDetailScreen(
     addOneTrack?.let { t ->
         AddToPlaylistDialog(
             playlists = userPlaylists.filter { it.id != playlistId },
-            onPick = { pl ->
-                vm.addTracksToPlaylist(pl.id, listOf(t.id))
+            onPick = { picked ->
+                picked.forEach { pl -> vm.addTracksToPlaylist(pl.id, listOf(t.id)) }
                 addOneTrack = null
             },
             onDismiss = { addOneTrack = null },

@@ -11,7 +11,8 @@
     <ID>ExplicitItLambdaParameter:ManageTabsScreen.kt${ _, it -&gt; it.tab.name }</ID>
     <ID>FunctionNaming:HomeScreen.kt$@Composable fun HomeScreen( vm: AppViewModel, navController: NavHostController, )</ID>
     <ID>FunctionNaming:HomeScreen.kt$@Composable private fun CreatePlaylistDialog( onConfirm: (String) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
-    <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun AddTracksToPlaylistDialog( playlists: List&lt;Playlist&gt;, pickedCount: Int, onAddToExisting: (Playlist) -&gt; Unit, onCreateNew: (String) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun AddTracksToPlaylistDialog( playlists: List&lt;Playlist&gt;, pickedCount: Int, onAddToExisting: (List&lt;Playlist&gt;) -&gt; Unit, onCreateNew: (String) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>FunctionNaming:MultiSelectionActions.kt$@Composable internal fun PlaylistCheckList( playlists: List&lt;Playlist&gt;, checkedIds: Set&lt;String&gt;, onToggle: (String) -&gt; Unit, )</ID>
     <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun DeleteTracksDialog( count: Int, onConfirm: () -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
     <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun PlaylistSelectionActionBar( selectedCount: Int, onPlay: () -&gt; Unit, onAdd: () -&gt; Unit, onShare: () -&gt; Unit, onRemove: () -&gt; Unit, onClear: () -&gt; Unit, modifier: Modifier = Modifier, removeEnabled: Boolean = true, )</ID>
     <ID>FunctionNaming:MultiSelectionActions.kt$@Composable fun RemoveTracksDialog( count: Int, onConfirm: () -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>

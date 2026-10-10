@@ -82,13 +82,15 @@ fun SearchScreen(
     var detailsTrack by remember { mutableStateOf<Track?>(null) }
 
     // ---- Multi-selection state (mirrors TracksScreen) ----
+    // The selection outlives the query: search, pick, search again, pick more, then
+    // act on everything picked. So it resolves against the library, not [results].
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     val selectionMode = selectedIds.isNotEmpty()
     var showAddMany by remember { mutableStateOf(false) }
 
     val selectedTracks: List<Track> =
-        remember(selectedIds, results) {
-            val byId = results.associateBy { it.id }
+        remember(selectedIds, allTracks) {
+            val byId = allTracks.associateBy { it.id }
             selectedIds.mapNotNull { byId[it] }
         }
 
@@ -102,10 +104,11 @@ fun SearchScreen(
 
     val deleter = rememberTrackDeleter(vm, onDeleted = { deleted -> selectedIds = selectedIds - deleted })
     val tagEditor = rememberTrackTagEditor(vm)
-    val allSelected = results.isNotEmpty() && selectedIds.size == results.size
+    val allSelected = results.isNotEmpty() && results.all { it.id in selectedIds }
 
     fun toggleSelectAll() {
-        selectedIds = if (allSelected) emptySet() else results.map { it.id }.toSet()
+        val resultIds = results.map { it.id }
+        selectedIds = if (allSelected) selectedIds - resultIds.toSet() else selectedIds + resultIds
     }
 
     val focusRequester = remember { FocusRequester() }
@@ -290,8 +293,8 @@ fun SearchScreen(
     addTrack?.let { t ->
         AddToPlaylistDialog(
             playlists = userPlaylists,
-            onPick = { pl ->
-                vm.addTracksToPlaylist(pl.id, listOf(t.id))
+            onPick = { picked ->
+                picked.forEach { pl -> vm.addTracksToPlaylist(pl.id, listOf(t.id)) }
                 addTrack = null
             },
             onDismiss = { addTrack = null },
@@ -307,8 +310,8 @@ fun SearchScreen(
         AddTracksToPlaylistDialog(
             playlists = userPlaylists,
             pickedCount = selectedIds.size,
-            onAddToExisting = { pl ->
-                vm.addTracksToPlaylist(pl.id, selectedIds.toList())
+            onAddToExisting = { picked ->
+                picked.forEach { pl -> vm.addTracksToPlaylist(pl.id, selectedIds.toList()) }
                 clearSelection()
                 showAddMany = false
             },

@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
@@ -29,13 +27,16 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.simplesound.app.data.model.Playlist
 import com.simplesound.app.data.model.Track
-import com.simplesound.app.util.trackCountLabel
 
 /** Bottom sheet of quick actions for a single track. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -155,43 +156,35 @@ private fun SheetItem(
     }
 }
 
-/** Pick a target user playlist to add a track to. */
+/** Pick one or more user playlists to add a track to. */
 @Composable
 fun AddToPlaylistDialog(
     playlists: List<Playlist>,
-    onPick: (Playlist) -> Unit,
+    onPick: (List<Playlist>) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var checkedIds by remember { mutableStateOf(emptySet<String>()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = {},
+        confirmButton = {
+            if (playlists.isNotEmpty()) {
+                TextButton(
+                    onClick = { onPick(playlists.filter { it.id in checkedIds }) },
+                    enabled = checkedIds.isNotEmpty(),
+                ) { Text(addLabel(checkedIds.size)) }
+            }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         title = { Text("Add to playlist") },
         text = {
             if (playlists.isEmpty()) {
                 Text("No playlists yet. Create one from the Playlists tab.")
             } else {
-                LazyColumn {
-                    items(playlists) { pl ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable { onPick(pl) }.padding(vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column {
-                                Text(
-                                    pl.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                )
-                                Text(
-                                    trackCountLabel(pl.trackCount),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
+                PlaylistCheckList(
+                    playlists = playlists,
+                    checkedIds = checkedIds,
+                    onToggle = { id -> checkedIds = if (id in checkedIds) checkedIds - id else checkedIds + id },
+                )
             }
         },
     )
