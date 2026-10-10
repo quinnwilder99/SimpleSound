@@ -302,7 +302,8 @@ class MusicRepository
                             // first run (e.g. "GOAT", "Classical") — never real user data.
                             .filterNot { it.id.startsWith("seed-") }
                     legacyPlaylists.forEachIndexed { index, pl ->
-                        playlistDao.insert(pl.toEntity(position = index))
+                        // Same backfill as MIGRATION_2_3: creation order, older than any real stamp.
+                        playlistDao.insert(pl.copy(createdAt = index + 1L).toEntity(position = index))
                         playlistTrackDao.replaceForPlaylist(pl.id, pl.trackIds)
                     }
 
@@ -786,14 +787,15 @@ class MusicRepository
 
         // ---------- Favorites tab contents ----------
 
-        /** Must hold [lock]; reads the already-published [_userPlaylists]/[_favoriteTrackIds]. */
-        private fun computeFavoritesTab(): List<Playlist> {
-            val hearted =
-                _userPlaylists.value
-                    .filter { it.favorited }
-                    .sortedByDescending { it.favoritedAt }
-            return listOf(favoriteTracksPlaylist()) + hearted
-        }
+        /**
+         * "Favorite tracks" first, then the hearted playlists in custom (drag) order.
+         * The UI re-sorts the hearted part to match whichever sort the Playlists tab
+         * is on (see sortPlaylists), so both tabs always list playlists the same way.
+         *
+         * Must hold [lock]; reads the already-published [_userPlaylists]/[_favoriteTrackIds].
+         */
+        private fun computeFavoritesTab(): List<Playlist> =
+            listOf(favoriteTracksPlaylist()) + _userPlaylists.value.filter { it.favorited }
 
         // ---------- Playlist mutations ----------
 
@@ -803,7 +805,7 @@ class MusicRepository
         ): String {
             val id = "user-" + UUID.randomUUID().toString()
             val ids = trackIds.distinct()
-            val playlist = Playlist(id, name.ifBlank { "New playlist" }, ids)
+            val playlist = Playlist(id, name.ifBlank { "New playlist" }, ids, createdAt = System.currentTimeMillis())
             val position: Int
             synchronized(lock) {
                 position = allPlaylists.size
@@ -948,25 +950,6 @@ class MusicRepository
             val order = orderedIds.toList()
             write {
                 db.withTransaction { order.forEachIndexed { index, id -> playlistDao.updatePosition(id, index) } }
-            }
-        }
-
-        /**
-         * Persist a user-chosen order for the hearted playlists on the Favorites tab
-         * ([orderedIds] top to bottom; "Favorite tracks" is pinned first and not part
-         * of it). Stored by reshuffling the existing [Playlist.favoritedAt] stamps
-         * (see [reorderedFavoriteStamps]) rather than adding a column, so there is no
-         * schema change.
-         */
-        fun reorderFavoritePlaylists(orderedIds: List<String>) {
-            val stamps: Map<String, Long>
-            synchronized(lock) {
-                stamps = reorderedFavoriteStamps(allPlaylists.filter { it.favorited }, orderedIds)
-                allPlaylists = allPlaylists.map { pl -> stamps[pl.id]?.let { pl.copy(favoritedAt = it) } ?: pl }
-                publishLocked()
-            }
-            write {
-                db.withTransaction { stamps.forEach { (id, at) -> playlistDao.updateFavoritedAt(id, at) } }
             }
         }
 

@@ -34,13 +34,15 @@ import com.simplesound.app.data.model.SortOption
 /**
  * The row above a list: a tappable sort label (opens a menu) on the left, and
  * shuffle + play-all circular buttons on the right — as in the reference app.
+ * Pass null for [onShuffle]/[onPlayAll] on a list that isn't playable (e.g. the
+ * Playlists tab) to leave the buttons out.
  */
 @Composable
 fun SortHeader(
     current: SortOption,
     onSort: (SortOption) -> Unit,
-    onShuffle: () -> Unit,
-    onPlayAll: () -> Unit,
+    onShuffle: (() -> Unit)?,
+    onPlayAll: (() -> Unit)?,
     modifier: Modifier = Modifier,
     // CUSTOM_ORDER only means anything inside a single playlist (it's backed by
     // a per-playlist saved order — see MusicRepository.sortPlaylistTracks); the
@@ -82,9 +84,9 @@ fun SortHeader(
             }
         }
         Spacer(Modifier.weight(1f))
-        CircleIcon(Icons.Rounded.Shuffle, "Shuffle", onShuffle)
-        Spacer(Modifier.width(10.dp))
-        CircleIcon(Icons.Rounded.PlayArrow, "Play all", onPlayAll, filled = true)
+        onShuffle?.let { CircleIcon(Icons.Rounded.Shuffle, "Shuffle", it) }
+        if (onShuffle != null && onPlayAll != null) Spacer(Modifier.width(10.dp))
+        onPlayAll?.let { CircleIcon(Icons.Rounded.PlayArrow, "Play all", it, filled = true) }
     }
 }
 

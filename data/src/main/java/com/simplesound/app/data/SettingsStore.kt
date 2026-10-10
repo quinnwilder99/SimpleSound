@@ -51,6 +51,7 @@ class SettingsStore
             val ACCENT = stringPreferencesKey("accent")
             val TABS = stringPreferencesKey("tab_config")
             val TRACKS_SORT = stringPreferencesKey("tracks_sort")
+            val PLAYLISTS_TAB_SORT = stringPreferencesKey("playlists_tab_sort")
 
             // Encoded "id1=NAME,id2=CUSTOM_ORDER,..." so each playlist remembers its
             // own last-chosen sort, independent of the Tracks tab sort.
@@ -86,6 +87,13 @@ class SettingsStore
                 SortOption.fromName(prefs[Keys.TRACKS_SORT])
             }
 
+        /** The user's last-chosen sort on the Playlists tab, which the Favorites tab follows too. */
+        val playlistsTabSort: Flow<SortOption> =
+            context.dataStore.data.map { prefs ->
+                PLAYLISTS_TAB_SORTS.firstOrNull { it.name == prefs[Keys.PLAYLISTS_TAB_SORT] }
+                    ?: DEFAULT_PLAYLISTS_TAB_SORT
+            }
+
         /** Crossfade duration in seconds, 0..[MAX_CROSSFADE_SECONDS]; 0 = off (the default). */
         val crossfadeSeconds: Flow<Int> =
             context.dataStore.data.map { prefs ->
@@ -102,6 +110,10 @@ class SettingsStore
 
         suspend fun setTracksSort(option: SortOption) {
             context.dataStore.edit { it[Keys.TRACKS_SORT] = option.name }
+        }
+
+        suspend fun setPlaylistsTabSort(option: SortOption) {
+            context.dataStore.edit { it[Keys.PLAYLISTS_TAB_SORT] = option.name }
         }
 
         suspend fun setCrossfadeSeconds(seconds: Int) {

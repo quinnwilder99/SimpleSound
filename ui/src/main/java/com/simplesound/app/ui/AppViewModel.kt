@@ -3,14 +3,18 @@ package com.simplesound.app.ui
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.simplesound.app.data.DEFAULT_PLAYLISTS_TAB_SORT
 import com.simplesound.app.data.DEFAULT_PLAYLIST_SORT
 import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.SettingsStore
 import com.simplesound.app.data.model.EdgeBarSide
+import com.simplesound.app.data.model.Playlist
+import com.simplesound.app.data.model.PlaylistKind
 import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Tab
 import com.simplesound.app.data.model.TabSetting
 import com.simplesound.app.data.model.Track
+import com.simplesound.app.data.sortPlaylists
 import com.simplesound.core.theme.AccentColor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -68,7 +73,26 @@ class AppViewModel
         val tracks = repository.tracks
         val userPlaylists = repository.userPlaylists
         val favoriteTrackIds = repository.favoriteTrackIds
-        val favoritesTabPlaylists = repository.favoritesTabPlaylists
+
+        /** The Playlists tab's sort (persisted); the Favorites tab follows it too. */
+        val playlistsTabSort =
+            settings.playlistsTabSort
+                .stateIn(viewModelScope, SharingStarted.Eagerly, DEFAULT_PLAYLISTS_TAB_SORT)
+
+        /** User playlists in the Playlists tab's chosen order. */
+        val sortedUserPlaylists: StateFlow<List<Playlist>> =
+            combine(userPlaylists, playlistsTabSort, ::sortPlaylists)
+                .stateIn(viewModelScope, SharingStarted.Eagerly, userPlaylists.value)
+
+        /**
+         * The Favorites tab: "Favorite tracks" pinned first, then the hearted
+         * playlists in the same order the Playlists tab shows them.
+         */
+        val favoritesTabPlaylists: StateFlow<List<Playlist>> =
+            combine(repository.favoritesTabPlaylists, playlistsTabSort) { tab, sort ->
+                val (pinned, hearted) = tab.partition { it.kind != PlaylistKind.USER }
+                pinned + sortPlaylists(hearted, sort)
+            }.stateIn(viewModelScope, SharingStarted.Eagerly, repository.favoritesTabPlaylists.value)
 
         /**
          * Temporarily hide the global persistent mini player. Set to `true` by screens
@@ -101,6 +125,8 @@ class AppViewModel
             }
 
         fun setTracksSort(option: SortOption) = viewModelScope.launch { settings.setTracksSort(option) }
+
+        fun setPlaylistsTabSort(option: SortOption) = viewModelScope.launch { settings.setPlaylistsTabSort(option) }
 
         fun setCrossfadeSeconds(seconds: Int) = viewModelScope.launch { settings.setCrossfadeSeconds(seconds) }
 
@@ -226,8 +252,6 @@ class AppViewModel
         ) = repository.updateTrackTags(trackId, title, artist, album)
 
         fun reorderPlaylists(orderedIds: List<String>) = repository.reorderPlaylists(orderedIds)
-
-        fun reorderFavoritePlaylists(orderedIds: List<String>) = repository.reorderFavoritePlaylists(orderedIds)
 
         fun nativePlaylists() = repository.nativePlaylists()
 

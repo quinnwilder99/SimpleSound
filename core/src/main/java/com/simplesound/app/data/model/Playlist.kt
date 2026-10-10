@@ -13,13 +13,16 @@ data class Playlist(
     val kind: PlaylistKind = PlaylistKind.USER,
     /** Whether the user "hearted" this playlist (shows in the Favorites tab). */
     val favorited: Boolean = false,
-    /**
-     * Sort key for the Favorites tab (highest on top). Set to epoch millis when the
-     * user hearts the playlist, so new hearts land on top; "Change order" on that tab
-     * reshuffles the existing stamps (see MusicRepository.reorderFavoritePlaylists).
-     * 0 when unhearted.
-     */
+    /** Epoch millis when the user hearted the playlist; 0 when unhearted. */
     val favoritedAt: Long = 0L,
+    /**
+     * When the playlist was created, for the Playlists tab's "Date added" sort
+     * (newest first). Epoch millis for playlists created since this was added;
+     * playlists that existed before carry small backfilled values (1, 2, 3, ... in
+     * their original creation order), so they still sort correctly and always
+     * count as older than any newer one.
+     */
+    val createdAt: Long = 0L,
 ) {
     val trackCount: Int get() = trackIds.size
     val isEditable: Boolean get() = kind == PlaylistKind.USER
