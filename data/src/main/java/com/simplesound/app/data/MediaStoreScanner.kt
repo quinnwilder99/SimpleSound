@@ -2,8 +2,15 @@ package com.simplesound.app.data
 
 import android.content.ContentUris
 import android.content.Context
+import android.os.Build
 import android.provider.MediaStore
 import com.simplesound.app.data.model.Track
+
+/** See [MediaStoreScanner.fingerprint]; [trackCount] is how many tracks [MediaStoreScanner.scan] would return. */
+data class LibraryFingerprint(
+    val key: String,
+    val trackCount: Int,
+)
 
 /**
  * Reads the device's audio library from MediaStore. Requires the READ_MEDIA_AUDIO
@@ -29,6 +36,52 @@ import com.simplesound.app.data.model.Track
  * art first and only falls back to this when no embedded picture exists.
  */
 object MediaStoreScanner {
+    /**
+     * Bump whenever [scan]'s projection, selection or row mapping changes, so every
+     * stored [fingerprint] goes stale and the next launch rescans once.
+     */
+    private const val SCAN_FORMAT = 1
+
+    private const val SELECTION = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+
+    /**
+     * A cheap summary of exactly the rows [scan] reads: equal fingerprints mean a
+     * scan would return the same list, so the (much heavier) scan + Room rewrite can
+     * be skipped. Any insert or edit raises the max GENERATION_MODIFIED, a removal
+     * lowers the row count, and a MediaStore rebuild (which can reassign ids) changes
+     * the volume version. The app's own last-update time is included so a new build
+     * always rescans once. Null (always scan) before Android 11, which has no
+     * generation column, or if anything here fails.
+     */
+    fun fingerprint(context: Context): LibraryFingerprint? =
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            null
+        } else {
+            runCatching {
+                var count = 0
+                var maxGeneration = 0L
+                val cursor =
+                    context.contentResolver.query(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        arrayOf(MediaStore.Audio.Media.GENERATION_MODIFIED),
+                        SELECTION,
+                        null,
+                        null,
+                    )
+                checkNotNull(cursor).use { c ->
+                    while (c.moveToNext()) {
+                        count++
+                        maxGeneration = maxOf(maxGeneration, c.getLong(0))
+                    }
+                }
+                val appUpdated = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
+                LibraryFingerprint(
+                    key = "$SCAN_FORMAT|${MediaStore.getVersion(context)}|$count|$maxGeneration|$appUpdated",
+                    trackCount = count,
+                )
+            }.getOrNull()
+        }
+
     fun scan(context: Context): List<Track> {
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection =
@@ -42,7 +95,7 @@ object MediaStoreScanner {
                 MediaStore.Audio.Media.DATA,
                 MediaStore.Audio.Media.DATE_ADDED,
             )
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        val selection = SELECTION
         val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
 
         val result = mutableListOf<Track>()

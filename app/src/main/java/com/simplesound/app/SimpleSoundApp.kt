@@ -18,8 +18,9 @@ import javax.inject.Inject
  * injected (rather than just referenced where needed) specifically to force Hilt
  * to construct them here: Hilt injects an `@HiltAndroidApp` Application's fields
  * before this class's own [onCreate] body runs, so by the time [onCreate] executes,
- * [musicRepository] has already restored playlists/favorites/play-stats from Room
- * (see its `init` block) and [mediaStoreObserver] is ready to be registered.
+ * [musicRepository] is already restoring playlists/favorites/play-stats from Room on
+ * its own thread (anything that reads them waits for that; see its `init` block) and
+ * [mediaStoreObserver] is ready to be registered.
  */
 @HiltAndroidApp
 class SimpleSoundApp : Application(), ImageLoaderFactory, Configuration.Provider {

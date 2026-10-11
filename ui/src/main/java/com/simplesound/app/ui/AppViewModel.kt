@@ -17,16 +17,20 @@ import com.simplesound.app.data.model.Track
 import com.simplesound.app.data.sortPlaylists
 import com.simplesound.core.theme.AccentColor
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /**
@@ -41,13 +45,50 @@ class AppViewModel
         private val settings: SettingsStore,
         private val repository: MusicRepository,
     ) : ViewModel() {
-        val accent =
-            settings.accent
-                .stateIn(viewModelScope, SharingStarted.Eagerly, AccentColor.Default)
+        private val accentLoaded = CompletableDeferred<Unit>()
+        private val tabSettingsLoaded = CompletableDeferred<Unit>()
 
-        val tabSettings =
-            settings.tabSettings
-                .stateIn(viewModelScope, SharingStarted.Eagerly, Tab.Default.map { TabSetting(it, true) })
+        val accent: StateFlow<AccentColor> = settings.accent.stateWithLoaded(AccentColor.Default, accentLoaded)
+
+        val tabSettings: StateFlow<List<TabSetting>> =
+            settings.tabSettings.stateWithLoaded(Tab.Default.map { TabSetting(it, true) }, tabSettingsLoaded)
+
+        /**
+         * False until the first frame can show the user's own accent, tabs, playlists
+         * and library rather than defaults and empty lists that visibly snap into place
+         * a moment later. MainActivity keeps the system splash up until then, capped at
+         * [STARTUP_HOLD_MAX_MS] so a slow disk can never stall the app.
+         */
+        val startupReady: StateFlow<Boolean> =
+            flow {
+                withTimeoutOrNull(STARTUP_HOLD_MAX_MS) {
+                    runCatching {
+                        accentLoaded.await()
+                        tabSettingsLoaded.await()
+                        repository.awaitRestored()
+                        repository.awaitLibraryLoaded()
+                    }
+                }
+                emit(true)
+            }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+        /**
+         * Like stateIn(Eagerly), but completes [loaded] only after the stored value has
+         * been published, so [startupReady] can never be true while a default still shows.
+         */
+        private fun <T> Flow<T>.stateWithLoaded(
+            initial: T,
+            loaded: CompletableDeferred<Unit>,
+        ): StateFlow<T> {
+            val state = MutableStateFlow(initial)
+            viewModelScope.launch {
+                collect {
+                    state.value = it
+                    loaded.complete(Unit)
+                }
+            }
+            return state.asStateFlow()
+        }
 
         /** The user's last-chosen sort order on the Tracks tab (persisted). */
         val tracksSort =
@@ -266,3 +307,5 @@ class AppViewModel
 
         fun tracksByIds(ids: List<Long>) = repository.tracksByIds(ids)
     }
+
+private const val STARTUP_HOLD_MAX_MS = 800L

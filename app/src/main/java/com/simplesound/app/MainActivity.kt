@@ -3,6 +3,8 @@ package com.simplesound.app
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -42,6 +44,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         requestPermissions.launch(requiredPermissions())
+        holdSplashUntilReady()
 
         setContent {
             val accent by viewModel.accent.collectAsStateWithLifecycle()
@@ -51,6 +54,25 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Keeps the system splash screen up (by declining to draw) until the first frame
+     * can show the real library and settings instead of defaults that snap into place
+     * a moment later. Composition still runs meanwhile, so the wait overlaps with
+     * building the UI rather than adding to it; [AppViewModel.startupReady] caps it.
+     */
+    private fun holdSplashUntilReady() {
+        val content = findViewById<View>(android.R.id.content)
+        content.viewTreeObserver.addOnPreDrawListener(
+            object : ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    if (!viewModel.startupReady.value) return false
+                    content.viewTreeObserver.removeOnPreDrawListener(this)
+                    return true
+                }
+            },
+        )
     }
 
     override fun onStart() {

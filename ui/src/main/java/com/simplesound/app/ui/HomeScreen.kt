@@ -57,6 +57,7 @@ import com.simplesound.app.ui.screens.folders.FoldersScreen
 import com.simplesound.app.ui.screens.playlists.PlaylistsScreen
 import com.simplesound.app.ui.screens.tracks.TracksScreen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
@@ -76,13 +77,22 @@ fun HomeScreen(
     // Keep every tab composed once built. By default the pager disposes a tab as it
     // leaves the screen and rebuilds it from scratch on the way back, and that
     // rebuild (80-110 ms on device) landed mid-slide as a visible hitch on every tab
-    // switch. Off at first so launch only builds the visible tab; the rest are built
-    // once, shortly after the first frame, before the user is likely to switch.
-    var keepAllTabs by remember { mutableStateOf(false) }
+    // switch. Launch only builds the visible tab; the rest are added shortly after
+    // the first real frame, one step (at most one tab per side) per frame with a
+    // pause in between -- building them all in one frame froze the UI for up to a
+    // second right when the user starts touching it.
+    var keptTabs by remember { mutableIntStateOf(0) }
+    var allTabsKept by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
+        vm.startupReady.first { it }
         withFrameNanos { }
         delay(KEEP_TABS_DELAY_MS)
-        keepAllTabs = true
+        while (keptTabs < pagerState.pageCount - 1) {
+            keptTabs++
+            withFrameNanos { }
+            delay(KEEP_TABS_STEP_MS)
+        }
+        allTabsKept = true
     }
 
     val firstTabIndex =
@@ -276,7 +286,7 @@ fun HomeScreen(
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
-                    beyondViewportPageCount = if (keepAllTabs) enabledTabs.size else 0,
+                    beyondViewportPageCount = if (allTabsKept) enabledTabs.size else keptTabs,
                 ) { page ->
                     val tab = enabledTabs.getOrNull(page) ?: Tab.TRACKS
                     Box(Modifier.fillMaxSize()) {
@@ -344,3 +354,4 @@ private fun CreatePlaylistDialog(
 }
 
 private const val KEEP_TABS_DELAY_MS = 500L
+private const val KEEP_TABS_STEP_MS = 150L

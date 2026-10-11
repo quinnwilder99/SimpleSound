@@ -97,6 +97,13 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
+            <!-- Compose pulls in emoji2, whose initializer fetches a downloadable emoji
+                 font through Play services on every launch (~2 s of background work in
+                 a startup trace). The system font already draws the emoji that track
+                 and playlist names use, so it is skipped. -->
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
         </provider>
 
     </application>

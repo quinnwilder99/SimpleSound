@@ -35,8 +35,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.concurrent.thread
 
 /**
  * Single source of truth for the music library and playlists.
@@ -107,6 +109,11 @@ class MusicRepository
             const val KEY_QUEUE_INDEX = "last_queue_index"
             const val KEY_SHUFFLE_ENABLED = "last_shuffle_enabled"
             const val KEY_REPEAT_MODE = "last_repeat_mode"
+            const val KEY_LIBRARY_FINGERPRINT = "library_fingerprint"
+            const val KEY_LIBRARY_SCANNED_AT = "library_scanned_at_ms"
+
+            /** See [isLibraryCurrent]. */
+            const val MAX_SCAN_AGE_MS = 24L * 60 * 60 * 1000
 
             const val NATIVE_LIMIT = 100
 
@@ -175,8 +182,41 @@ class MusicRepository
         private val _favoritesTab = MutableStateFlow<List<Playlist>>(emptyList())
         val favoritesTabPlaylists: StateFlow<List<Playlist>> = _favoritesTab.asStateFlow()
 
+        /** Completed once playlists/favorites/stats/custom orders are restored from Room. */
+        private val restored = CompletableDeferred<Unit>()
+
         init {
+            // Restore on a dedicated thread that takes [lock] *before* this constructor
+            // returns and keeps it until the small tables are loaded. Every method that
+            // touches in-memory state already synchronizes on [lock], so anything that
+            // arrives early simply waits -- the same guarantee the old runBlocking on the
+            // main thread gave -- while app start (Activity, Compose) runs in parallel
+            // instead of sleeping ~100 ms in Application.onCreate. A failure is rethrown
+            // on that thread and crashes the process, as before: never run on a
+            // half-restored state (and never wipe data to get past it).
+            val lockTaken = CountDownLatch(1)
+            thread(name = "MusicRepository-restore") {
+                synchronized(lock) {
+                    lockTaken.countDown()
+                    try {
+                        runBlocking {
+                            migrateLegacyPrefsIfNeeded()
+                            restoreFromDatabase()
+                        }
+                        restored.complete(Unit)
+                    } catch (
+                        @Suppress("TooGenericExceptionCaught") t: Throwable,
+                    ) {
+                        restored.completeExceptionally(t)
+                        throw t
+                    }
+                }
+            }
+            lockTaken.await()
             scope.launch {
+                // Nothing may reach Room before the one-time legacy migration and the
+                // restore have read it (mutators can't anyway: they wait on [lock]).
+                restored.await()
                 for (write in writeQueue) {
                     try {
                         write()
@@ -190,21 +230,28 @@ class MusicRepository
                     }
                 }
             }
-            // Blocking is deliberate: SimpleSoundApp field-injects this repository,
-            // which Hilt constructs before Application.onCreate()'s body runs, so
-            // playlists/favorites are guaranteed ready before any screen reads them.
-            // Only the small tables are read here -- the (potentially large) track
-            // table is loaded in the background below so launch time doesn't grow
-            // with the library.
-            runBlocking(Dispatchers.IO) {
-                migrateLegacyPrefsIfNeeded()
-                restoreFromDatabase()
+            // The (potentially large) track table loads after the small tables so the
+            // restore holding [lock] stays short.
+            scope.launch {
+                restored.await()
+                restoreTracksFromDatabase()
             }
-            scope.launch { restoreTracksFromDatabase() }
         }
 
         /** Suspends until the track library has been loaded (from Room or a scan). */
         suspend fun awaitLibraryLoaded() = libraryLoaded.await()
+
+        /** Suspends until playlists, favorites, stats and custom orders are restored from Room. */
+        suspend fun awaitRestored() = restored.await()
+
+        /**
+         * For the few readers that go through the published flows instead of [lock]:
+         * waits (only during app start) for the restore so they never answer from the
+         * empty pre-restore state, e.g. "playlist not found".
+         */
+        private fun awaitRestoredBlocking() {
+            if (!restored.isCompleted) synchronized(lock) { }
+        }
 
         /**
          * Waits for every write queued so far to finish. Not needed by production code
@@ -286,13 +333,13 @@ class MusicRepository
          */
         private suspend fun migrateLegacyPrefsIfNeeded() {
             if (prefs.getBoolean(KEY_ROOM_MIGRATED, false)) return
-            // This is a one-time bootstrap step that runs inside runBlocking() in
-            // init{} — an uncaught exception here would crash Application
-            // construction itself. try/finally guarantees KEY_ROOM_MIGRATED is set
-            // even if a step fails partway, so a single bad launch can't turn into a
-            // permanent boot loop that only clearing app data would escape. The
-            // per-row DAO calls below (REPLACE/IGNORE/upsert) are also idempotent, so
-            // a retry of a partially-completed run can't throw a constraint error.
+            // This is a one-time bootstrap step that runs on init{}'s restore thread;
+            // an uncaught exception here would crash the app at launch. try/finally
+            // guarantees KEY_ROOM_MIGRATED is set even if a step fails partway, so a
+            // single bad launch can't turn into a permanent boot loop that only
+            // clearing app data would escape. The per-row DAO calls below
+            // (REPLACE/IGNORE/upsert) are also idempotent, so a retry of a
+            // partially-completed run can't throw a constraint error.
             try {
                 if (prefs.getBoolean(KEY_LEGACY_INITIALIZED, false)) {
                     val legacyPlaylists =
@@ -473,7 +520,10 @@ class MusicRepository
         /**
          * Rescans MediaStore and merges the result into Room and memory. Runs on every
          * app open and whenever [com.simplesound.app.data.sync.MediaStoreObserver]
-         * sees the device's audio change.
+         * sees the device's audio change -- but skips the scan when MediaStore's audio
+         * rows are unchanged since the last persisted one (see
+         * [MediaStoreScanner.fingerprint]): Room already holds exactly that result, so
+         * a scan would only burn CPU and rewrite every track row at each launch.
          *
          * A track missing from the scan is kept as soft-missing (see
          * [reconcileLibrary]) rather than having its favorites/playlists/stats deleted,
@@ -486,23 +536,61 @@ class MusicRepository
                 libraryLoaded.complete(Unit)
                 return
             }
+            // Read before scanning: a change that lands mid-scan then leaves a stale
+            // fingerprint behind, which only costs one extra scan next time.
+            val fingerprint = MediaStoreScanner.fingerprint(context)
+            if (fingerprint == null || !isLibraryCurrent(fingerprint)) scanAndSync(context, fingerprint)
+        }
+
+        private suspend fun scanAndSync(
+            context: Context,
+            fingerprint: LibraryFingerprint?,
+        ) {
             val scanned = runCatching { MediaStoreScanner.scan(context) }.getOrNull()
             if (scanned == null) {
                 libraryLoaded.complete(Unit)
                 return
             }
-            syncScannedLibrary(scanned)
+            if (syncScannedLibrary(scanned) && fingerprint != null) {
+                prefs.edit()
+                    .putString(KEY_LIBRARY_FINGERPRINT, fingerprint.key)
+                    .putLong(KEY_LIBRARY_SCANNED_AT, System.currentTimeMillis())
+                    .apply()
+            }
         }
 
-        /** Merges an already-complete MediaStore snapshot; split out of [loadDeviceLibrary] for tests. */
-        internal suspend fun syncScannedLibrary(scanned: List<Track>) {
-            syncMutex.withLock {
+        /**
+         * True when the last persisted scan saw exactly [fingerprint], is recent, and the
+         * library loaded from Room still holds one track per MediaStore row -- so a Room
+         * read that failed, or a Room-side delete whose file is still there, is healed by
+         * a real scan rather than kept until MediaStore next changes. The age cap is a
+         * cheap backstop (one scan a day) that also lets soft-missing tracks age out on
+         * schedule.
+         */
+        private suspend fun isLibraryCurrent(fingerprint: LibraryFingerprint): Boolean {
+            val age = System.currentTimeMillis() - prefs.getLong(KEY_LIBRARY_SCANNED_AT, 0L)
+            if (prefs.getString(KEY_LIBRARY_FINGERPRINT, null) != fingerprint.key || age !in 0 until MAX_SCAN_AGE_MS) {
+                return false
+            }
+            awaitLibraryLoaded()
+            return _tracks.value.size == fingerprint.trackCount
+        }
+
+        /**
+         * Merges an already-complete MediaStore snapshot; split out of [loadDeviceLibrary]
+         * for tests. Returns whether it reached Room.
+         */
+        internal suspend fun syncScannedLibrary(scanned: List<Track>): Boolean {
+            // An id remap must apply to the restored references exactly once.
+            restored.await()
+            return syncMutex.withLock {
                 val result =
                     runCatching { writeAndAwait { persistScan(scanned) } }
                         .onFailure { Log.e(TAG, "Library sync failed", it) }
                         .getOrNull()
                 if (result != null) applyScanInMemory(scanned, result)
                 libraryLoaded.complete(Unit)
+                result != null
             }
         }
 
@@ -709,7 +797,10 @@ class MusicRepository
 
         // ---------- Favorites (single tracks) ----------
 
-        fun isFavorite(trackId: Long): Boolean = trackId in _favoriteTrackIds.value
+        fun isFavorite(trackId: Long): Boolean {
+            awaitRestoredBlocking()
+            return trackId in _favoriteTrackIds.value
+        }
 
         fun toggleFavoriteTrack(trackId: Long) {
             val added: Boolean
@@ -758,6 +849,7 @@ class MusicRepository
         // ---------- Native (computed) playlists ----------
 
         fun nativePlaylists(): List<Playlist> {
+            awaitRestoredBlocking()
             val all = _tracks.value
             val recentlyAdded = all.sortedByDescending { it.dateAddedSec }
             val mostPlayed = all.filter { it.playCount > 0 }.sortedByDescending { it.playCount }
@@ -953,11 +1045,13 @@ class MusicRepository
             }
         }
 
-        fun playlistById(id: String): Playlist? =
+        fun playlistById(id: String): Playlist? {
+            awaitRestoredBlocking()
             // nativePlaylists() already ends with favoriteTracksPlaylist(), so a third
             // fallback for it here would never be reached.
-            _userPlaylists.value.firstOrNull { it.id == id }
+            return _userPlaylists.value.firstOrNull { it.id == id }
                 ?: nativePlaylists().firstOrNull { it.id == id }
+        }
 
         private inline fun update(
             id: String,

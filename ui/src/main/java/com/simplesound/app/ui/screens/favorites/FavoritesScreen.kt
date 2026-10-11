@@ -354,11 +354,14 @@ private fun PlaylistCarousel(
                 contentPadding = PaddingValues(horizontal = sidePadding),
                 beyondViewportPageCount = 1,
                 flingBehavior = PagerDefaults.flingBehavior(state = pagerState, snapAnimationSpec = settle),
-                key = { playlists[it].id },
+                // The page count reads the live list while these lambdas hold the list
+                // from the last recomposition; for a frame after the list changes size
+                // (e.g. it fills in at launch) the two disagree, so never index blindly.
+                key = { playlists.getOrNull(it)?.id ?: "pending-$it" },
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             ) { page ->
-                val pl = playlists[page]
+                val pl = playlists.getOrNull(page) ?: return@HorizontalPager
                 CarouselCover(
                     playlist = pl,
                     // Signed distance from the centre slot: 0 = centred, ±1 = one page
@@ -428,6 +431,9 @@ private fun CarouselCover(
 /** One full turn of the centre disc every this many seconds. */
 private const val DISC_SECONDS_PER_TURN = 10f
 
+/** ~60 fps, with slack so a 60 Hz screen still advances on every frame. */
+private const val DISC_MIN_FRAME_NANOS = 14_000_000L
+
 /**
  * The cover's rotation in degrees. The centre disc turns at full speed; a cover
  * spins slower the further it is from the centre and is still once a whole page
@@ -444,17 +450,23 @@ private fun rememberDiscSpin(
     // The frame loop asks for a new frame every vsync, so it must stop while the
     // Favorites tab is off-screen (it stays composed then; see HomeScreen) or the
     // whole app would keep redrawing at full refresh rate from any tab.
+    //
+    // A slow spin looks the same at 60 fps as at 120, so on a 120 Hz screen the
+    // angle (and with it the redraw) only advances every other vsync: half the
+    // drawing work while music plays, still paced exactly on vsync.
     LaunchedEffect(spinning) {
         if (!spinning) return@LaunchedEffect
         var last = 0L
         while (true) {
             withFrameNanos { now ->
-                if (last != 0L) {
+                if (last == 0L) {
+                    last = now
+                } else if (now - last >= DISC_MIN_FRAME_NANOS) {
                     val focus = 1f - abs(offset()).coerceAtMost(1f)
                     val seconds = (now - last) / 1_000_000_000f
                     angle.floatValue = (angle.floatValue + seconds * focus * 360f / DISC_SECONDS_PER_TURN) % 360f
+                    last = now
                 }
-                last = now
             }
         }
     }
