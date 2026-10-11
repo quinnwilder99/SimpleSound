@@ -248,7 +248,7 @@ class PlayerController
          */
         fun togglePlayPause() =
             withController { c ->
-                if (c.isPlaying) c.pause() else c.play()
+                c.playOrPause()
             }
 
         fun next() = withController { it.seekToNextMediaItem() }

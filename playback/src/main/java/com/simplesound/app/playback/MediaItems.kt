@@ -5,6 +5,8 @@ import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import com.simplesound.app.data.model.Track
 
 /**
@@ -67,4 +69,21 @@ internal fun Player.playOrder(): List<Int> {
         index = timeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, shuffle)
     }
     return order
+}
+
+/**
+ * Play/pause as the user means it. A bare play() is a no-op on a player that a
+ * playback error or stop() left IDLE, or one that reached the end of the queue
+ * (ENDED) -- which used to leave the Play button dead until another track was
+ * picked. Media3's helper prepares / restarts those first. An empty player (the
+ * service is still restoring the saved queue) just gets play(), so playback
+ * starts the moment the queue lands.
+ */
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun Player.playOrPause() {
+    if (mediaItemCount == 0) {
+        play()
+        return
+    }
+    Util.handlePlayPauseButtonAction(this)
 }

@@ -16,8 +16,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
-import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
@@ -385,10 +383,7 @@ class PlaybackService : MediaSessionService() {
                 reason: Int,
             ) = rearmCrossfadeWatcher()
 
-            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
-                rearmCrossfadeWatcher()
-                applyAudioOffloadPreference(playbackParameters.speed)
-            }
+            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) = rearmCrossfadeWatcher()
 
             override fun onTimelineChanged(
                 timeline: Timeline,
@@ -434,10 +429,14 @@ class PlaybackService : MediaSessionService() {
                     true,
                 )
                 .setHandleAudioBecomingNoisy(true)
+                // Keeps the CPU awake while playing so the player (and the crossfade
+                // timer) keep running with the screen off. Audio offload is deliberately
+                // not used: on the Pixel it left playback stuck "playing" in silence
+                // ~20 min into a screen-off session, with Play unable to recover it.
+                .setWakeMode(C.WAKE_MODE_LOCAL)
                 .build()
         player.shuffleModeEnabled = musicRepository.lastShuffleEnabled()
         player.repeatMode = savedToRepeatMode(musicRepository.lastRepeatMode())
-        applyAudioOffloadPreference(player.playbackParameters.speed)
         player.addListener(crossfadeListener)
         player.addListener(playRecordListener)
         player.addListener(errorRecoveryListener)
@@ -553,9 +552,9 @@ class PlaybackService : MediaSessionService() {
 
     /** Catches the moment the current track enters its last [crossfadeSeconds], only
      *  while playing with crossfade on. Rather than polling the whole track (a 5 Hz
-     *  wake-up for all of playback, even with crossfade off, which also kept audio
-     *  offload from ever sleeping) it sleeps until [CROSSFADE_LEAD_MS] before the fade
-     *  point and polls finely only from there; listeners re-arm it when that point moves. */
+     *  wake-up for all of playback, even with crossfade off) it sleeps until
+     *  [CROSSFADE_LEAD_MS] before the fade point and polls finely only from there;
+     *  listeners re-arm it when that point moves. */
     private fun startCrossfadeWatcher() {
         stopCrossfadeWatcher()
         if (crossfadeSeconds <= 0) return
@@ -583,37 +582,6 @@ class PlaybackService : MediaSessionService() {
         val sleepMs = duration - player.currentPosition - effectiveMs - CROSSFADE_LEAD_MS
         val speed = player.playbackParameters.speed.takeIf { it > 0f } ?: 1f
         return (sleepMs / speed).toLong().coerceAtLeast(CROSSFADE_POLL_MS)
-    }
-
-    // ---- Audio offload ----
-
-    private var offloadEnabled: Boolean? = null
-
-    /**
-     * Lets the device's audio DSP decode and play the track while the CPU sleeps --
-     * the single biggest battery saving for screen-off listening. ExoPlayer falls back
-     * to normal playback on its own where the format/device can't offload, and gapless
-     * is required so albums keep their seamless transitions. Off for non-1x speeds,
-     * since offloaded output can't apply ExoPlayer's speed processing.
-     */
-    @androidx.annotation.OptIn(UnstableApi::class)
-    private fun applyAudioOffloadPreference(speed: Float) {
-        val enable = speed == 1f
-        if (offloadEnabled == enable) return
-        offloadEnabled = enable
-        val prefs =
-            AudioOffloadPreferences.Builder()
-                .setAudioOffloadMode(
-                    if (enable) {
-                        AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
-                    } else {
-                        AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
-                    },
-                )
-                .setIsGaplessSupportRequired(true)
-                .build()
-        player.trackSelectionParameters =
-            player.trackSelectionParameters.buildUpon().setAudioOffloadPreferences(prefs).build()
     }
 
     private fun stopCrossfadeWatcher() {
@@ -763,7 +731,7 @@ class PlaybackService : MediaSessionService() {
 
         /** Pausing, seeking and track changes already save the exact position; this
          *  periodic save only bounds what a process kill mid-playback can lose, so it is
-         *  kept infrequent -- each one wakes the CPU out of audio-offload sleep. */
+         *  kept infrequent. */
         private const val SAVE_POSITION_INTERVAL_MS = 15_000L
 
         /** How long before a track's crossfade point the watcher switches from one long

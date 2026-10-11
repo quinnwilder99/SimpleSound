@@ -18,6 +18,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- PlaybackService's ExoPlayer wake mode: keeps the CPU awake while playing
+         with the screen off. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Lets the full-screen notification in LockScreenControlLauncher actually launch
          LockScreenControlActivity over the lock screen, instead of just sitting as a

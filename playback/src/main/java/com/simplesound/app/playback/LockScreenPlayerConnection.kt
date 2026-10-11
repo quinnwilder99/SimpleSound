@@ -81,7 +81,7 @@ class LockScreenPlayerConnection(private val context: Context) {
     }
 
     fun togglePlayPause() {
-        controller?.let { if (it.isPlaying) it.pause() else it.play() }
+        controller?.playOrPause()
     }
 
     fun next() = controller?.seekToNextMediaItem()
