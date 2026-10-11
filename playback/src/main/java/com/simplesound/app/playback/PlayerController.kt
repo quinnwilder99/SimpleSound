@@ -37,7 +37,7 @@ import javax.inject.Singleton
  *   moments after launch) are queued and run once connected, instead of being
  *   silently dropped.
  *
- * The sleep timer state ([sleepTimerActive] / [sleepTimerRemainingMs]) is owned by
+ * The sleep timer state ([sleepTimerActive] / [sleepTimerEndElapsed]) is owned by
  * [PlaybackService] so the countdown keeps running while the app is backgrounded.
  */
 @Singleton
@@ -80,8 +80,10 @@ class PlayerController
         /** Owned by [PlaybackService] so it survives Activity onStop(). */
         val sleepTimerActive: StateFlow<Boolean> = PlaybackService.sleepTimerActive
 
-        /** Owned by [PlaybackService] so it survives Activity onStop(). */
-        val sleepTimerRemainingMs: StateFlow<Long> = PlaybackService.sleepTimerRemainingMs
+        /** Owned by [PlaybackService] so it survives Activity onStop(). An
+         *  [android.os.SystemClock.elapsedRealtime] deadline (0 = none); displays tick
+         *  the countdown from it themselves. */
+        val sleepTimerEndElapsed: StateFlow<Long> = PlaybackService.sleepTimerEndElapsed
 
         private val _positionMs = MutableStateFlow(0L)
         val positionMs: StateFlow<Long> = _positionMs.asStateFlow()

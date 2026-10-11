@@ -13,8 +13,11 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
@@ -121,8 +124,6 @@ class PlaybackService : MediaSessionService() {
 
     private val sleepHandler = Handler(Looper.getMainLooper())
     private var sleepRunnable: Runnable? = null
-    private var sleepTicker: Runnable? = null
-    private var sleepEndElapsed: Long = 0L
 
     // ---- Crossfade (Samsung Music-style track-to-track overlap) ----
     // `player` stays the single source of truth for the MediaSession/notification/
@@ -376,10 +377,29 @@ class PlaybackService : MediaSessionService() {
                 if (!player.playWhenReady) cancelActiveCrossfade()
             }
 
+            // The watcher sleeps until the computed fade point, so anything that moves
+            // that point (seek, new item, speed, a duration becoming known) re-arms it.
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) = rearmCrossfadeWatcher()
+
+            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+                rearmCrossfadeWatcher()
+                applyAudioOffloadPreference(playbackParameters.speed)
+            }
+
+            override fun onTimelineChanged(
+                timeline: Timeline,
+                reason: Int,
+            ) = rearmCrossfadeWatcher()
+
             override fun onMediaItemTransition(
                 mediaItem: MediaItem?,
                 reason: Int,
             ) {
+                rearmCrossfadeWatcher()
                 if (suppressNextTransitionCancel) {
                     // This is the transition *we* caused by seeking `player` ahead in
                     // maybeStartCrossfade() -- the fade is already running, so leave it be.
@@ -395,20 +415,6 @@ class PlaybackService : MediaSessionService() {
 
             override fun onPlayerError(error: PlaybackException) {
                 cancelActiveCrossfade()
-            }
-        }
-
-    private val ticker =
-        object : Runnable {
-            override fun run() {
-                val remaining = sleepEndElapsed - SystemClock.elapsedRealtime()
-                if (remaining <= 0L) {
-                    _sleepTimerRemainingMs.value = 0L
-                    fireSleepTimer()
-                    return
-                }
-                _sleepTimerRemainingMs.value = remaining
-                sleepHandler.postDelayed(this, 1_000L)
             }
         }
 
@@ -431,6 +437,7 @@ class PlaybackService : MediaSessionService() {
                 .build()
         player.shuffleModeEnabled = musicRepository.lastShuffleEnabled()
         player.repeatMode = savedToRepeatMode(musicRepository.lastRepeatMode())
+        applyAudioOffloadPreference(player.playbackParameters.speed)
         player.addListener(crossfadeListener)
         player.addListener(playRecordListener)
         player.addListener(errorRecoveryListener)
@@ -460,6 +467,7 @@ class PlaybackService : MediaSessionService() {
             settingsStore.crossfadeSeconds.collect { seconds ->
                 crossfadeSeconds = seconds
                 if (seconds <= 0) cancelActiveCrossfade()
+                rearmCrossfadeWatcher()
             }
         }
         serviceScope.launch {
@@ -497,12 +505,10 @@ class PlaybackService : MediaSessionService() {
         cancelSleepTimerInternal()
         if (minutes <= 0) return
         val totalMs = minutes * 60_000L
+        val end = SystemClock.elapsedRealtime() + totalMs
+        _sleepTimerEndElapsed.value = end
         _sleepTimerActive.value = true
-        _sleepTimerRemainingMs.value = totalMs
-        sleepEndElapsed = SystemClock.elapsedRealtime() + totalMs
-        sleepPrefs.edit().putLong(KEY_DEADLINE_ELAPSED, sleepEndElapsed).apply()
-        sleepTicker = ticker
-        sleepHandler.post(ticker)
+        sleepPrefs.edit().putLong(KEY_DEADLINE_ELAPSED, end).apply()
         val r = Runnable { fireSleepTimer() }
         sleepRunnable = r
         sleepHandler.postDelayed(r, totalMs)
@@ -512,11 +518,9 @@ class PlaybackService : MediaSessionService() {
         if (!_sleepTimerActive.value) return
         player.pause()
         _sleepTimerActive.value = false
-        _sleepTimerRemainingMs.value = 0L
+        _sleepTimerEndElapsed.value = 0L
         sleepRunnable?.let { sleepHandler.removeCallbacks(it) }
         sleepRunnable = null
-        sleepTicker?.let { sleepHandler.removeCallbacks(it) }
-        sleepTicker = null
         sleepPrefs.edit().remove(KEY_DEADLINE_ELAPSED).apply()
     }
 
@@ -525,10 +529,8 @@ class PlaybackService : MediaSessionService() {
     private fun cancelSleepTimerInternal() {
         sleepRunnable?.let { sleepHandler.removeCallbacks(it) }
         sleepRunnable = null
-        sleepTicker?.let { sleepHandler.removeCallbacks(it) }
-        sleepTicker = null
         _sleepTimerActive.value = false
-        _sleepTimerRemainingMs.value = 0L
+        _sleepTimerEndElapsed.value = 0L
         sleepPrefs.edit().remove(KEY_DEADLINE_ELAPSED).apply()
     }
 
@@ -540,11 +542,8 @@ class PlaybackService : MediaSessionService() {
             sleepPrefs.edit().remove(KEY_DEADLINE_ELAPSED).apply()
             return
         }
-        sleepEndElapsed = end
+        _sleepTimerEndElapsed.value = end
         _sleepTimerActive.value = true
-        _sleepTimerRemainingMs.value = remaining
-        sleepTicker = ticker
-        sleepHandler.post(ticker)
         val r = Runnable { fireSleepTimer() }
         sleepRunnable = r
         sleepHandler.postDelayed(r, remaining)
@@ -552,20 +551,69 @@ class PlaybackService : MediaSessionService() {
 
     // ---- Crossfade ----
 
-    /** Polls playback position every 200ms (only while actually playing) to catch
-     *  the moment the current track enters its last [crossfadeSeconds]. */
+    /** Catches the moment the current track enters its last [crossfadeSeconds], only
+     *  while playing with crossfade on. Rather than polling the whole track (a 5 Hz
+     *  wake-up for all of playback, even with crossfade off, which also kept audio
+     *  offload from ever sleeping) it sleeps until [CROSSFADE_LEAD_MS] before the fade
+     *  point and polls finely only from there; listeners re-arm it when that point moves. */
     private fun startCrossfadeWatcher() {
-        if (crossfadeWatchRunnable != null) return
+        stopCrossfadeWatcher()
+        if (crossfadeSeconds <= 0) return
         val r =
             object : Runnable {
                 override fun run() {
                     maybeStartCrossfade()
-                    crossfadeWatchRunnable = this
-                    sleepHandler.postDelayed(this, 200L)
+                    // maybeStartCrossfade()'s own skip re-arms the watcher through the
+                    // listeners; only keep going if that didn't replace this runnable.
+                    if (crossfadeWatchRunnable === this) sleepHandler.postDelayed(this, nextCrossfadeCheckDelayMs())
                 }
             }
         crossfadeWatchRunnable = r
-        sleepHandler.post(r)
+        sleepHandler.postDelayed(r, nextCrossfadeCheckDelayMs())
+    }
+
+    private fun rearmCrossfadeWatcher() {
+        if (player.isPlaying) startCrossfadeWatcher() else stopCrossfadeWatcher()
+    }
+
+    private fun nextCrossfadeCheckDelayMs(): Long {
+        val duration = player.duration
+        if (duration <= 0 || duration == C.TIME_UNSET) return CROSSFADE_POLL_MS
+        val effectiveMs = minOf(crossfadeSeconds * 1_000L, duration / 2)
+        val sleepMs = duration - player.currentPosition - effectiveMs - CROSSFADE_LEAD_MS
+        val speed = player.playbackParameters.speed.takeIf { it > 0f } ?: 1f
+        return (sleepMs / speed).toLong().coerceAtLeast(CROSSFADE_POLL_MS)
+    }
+
+    // ---- Audio offload ----
+
+    private var offloadEnabled: Boolean? = null
+
+    /**
+     * Lets the device's audio DSP decode and play the track while the CPU sleeps --
+     * the single biggest battery saving for screen-off listening. ExoPlayer falls back
+     * to normal playback on its own where the format/device can't offload, and gapless
+     * is required so albums keep their seamless transitions. Off for non-1x speeds,
+     * since offloaded output can't apply ExoPlayer's speed processing.
+     */
+    @androidx.annotation.OptIn(UnstableApi::class)
+    private fun applyAudioOffloadPreference(speed: Float) {
+        val enable = speed == 1f
+        if (offloadEnabled == enable) return
+        offloadEnabled = enable
+        val prefs =
+            AudioOffloadPreferences.Builder()
+                .setAudioOffloadMode(
+                    if (enable) {
+                        AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                    } else {
+                        AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+                    },
+                )
+                .setIsGaplessSupportRequired(true)
+                .build()
+        player.trackSelectionParameters =
+            player.trackSelectionParameters.buildUpon().setAudioOffloadPreferences(prefs).build()
     }
 
     private fun stopCrossfadeWatcher() {
@@ -692,7 +740,7 @@ class PlaybackService : MediaSessionService() {
         cancelScheduledRecordPlay()
         // Unlike onTaskRemoved, onDestroy can run without onTaskRemoved having run
         // first (e.g. system-initiated teardown while a sleep timer is armed). Without
-        // this, a pending sleepRunnable/sleepTicker would fire later on sleepHandler
+        // this, a pending sleepRunnable would fire later on sleepHandler
         // (unscoped to the service) and call fireSleepTimer() -> player.pause() on the
         // ExoPlayer instance being released below.
         cancelSleepTimerInternal()
@@ -713,7 +761,15 @@ class PlaybackService : MediaSessionService() {
         /** Listening time before a track counts as "played" (or half the track, if shorter). */
         private const val PLAY_RECORD_THRESHOLD_MS = 30_000L
 
-        private const val SAVE_POSITION_INTERVAL_MS = 5_000L
+        /** Pausing, seeking and track changes already save the exact position; this
+         *  periodic save only bounds what a process kill mid-playback can lose, so it is
+         *  kept infrequent -- each one wakes the CPU out of audio-offload sleep. */
+        private const val SAVE_POSITION_INTERVAL_MS = 15_000L
+
+        /** How long before a track's crossfade point the watcher switches from one long
+         *  sleep to fine polling, absorbing position-estimate drift. */
+        private const val CROSSFADE_LEAD_MS = 1_000L
+        private const val CROSSFADE_POLL_MS = 200L
 
         /** Saved repeat encoding (0 = off, 1 = all, 2 = one) <-> [Player] constants. */
         private fun repeatModeToSaved(mode: Int): Int =
@@ -742,7 +798,11 @@ class PlaybackService : MediaSessionService() {
         private val _sleepTimerActive = MutableStateFlow(false)
         val sleepTimerActive: StateFlow<Boolean> = _sleepTimerActive
 
-        private val _sleepTimerRemainingMs = MutableStateFlow(0L)
-        val sleepTimerRemainingMs: StateFlow<Long> = _sleepTimerRemainingMs
+        /** [SystemClock.elapsedRealtime] deadline of the active sleep timer, 0 when none.
+         *  A deadline rather than a ticking "remaining" value so the service never wakes
+         *  up once a second just to update a number; whoever displays the countdown
+         *  (the Sleep timer screen) ticks it itself, and only while visible. */
+        private val _sleepTimerEndElapsed = MutableStateFlow(0L)
+        val sleepTimerEndElapsed: StateFlow<Long> = _sleepTimerEndElapsed
     }
 }

@@ -1,5 +1,6 @@
 package com.simplesound.app.ui.screens.settings
 
+import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +31,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,8 +43,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.simplesound.app.ui.LocalPlayer
+import kotlinx.coroutines.delay
 
 /** Preset sleep timer durations, in minutes. */
 private val SleepTimerPresets = listOf(5, 10, 15, 30, 45, 60, 90)
@@ -84,7 +91,27 @@ private fun formatRemaining(ms: Long): String {
 fun SleepTimerScreen(onBack: () -> Unit) {
     val player = LocalPlayer.current
     val active by player.sleepTimerActive.collectAsStateWithLifecycle()
-    val remainingMs by player.sleepTimerRemainingMs.collectAsStateWithLifecycle()
+    val endElapsed by player.sleepTimerEndElapsed.collectAsStateWithLifecycle()
+
+    // The service only publishes the deadline; the countdown is ticked here, and only
+    // while this screen is actually visible.
+    var remainingMs by remember { mutableLongStateOf(0L) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(active, endElapsed) {
+        if (!active || endElapsed <= 0L) {
+            remainingMs = 0L
+            return@LaunchedEffect
+        }
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                val left = (endElapsed - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+                remainingMs = left
+                if (left == 0L) break
+                // Land on the next whole second so the display flips in step with it.
+                delay(left % 1_000L + 1L)
+            }
+        }
+    }
 
     // Total selected duration in minutes (presets set this directly; custom fields
     // contribute hours + minutes).

@@ -28,9 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.ui.LocalPlayer
@@ -59,13 +62,14 @@ fun MiniPlayer(
     val track by player.currentTrack.collectAsStateWithLifecycle()
     val lastPlayed by player.lastPlayedTrack.collectAsStateWithLifecycle()
     val isPlaying by player.isPlaying.collectAsStateWithLifecycle()
-    val positionMs by player.positionMs.collectAsStateWithLifecycle()
+    // Kept as a State and read only in the progress line's draw block: position ticks
+    // twice a second and should redraw that 2.5dp line, not recompose the whole bar.
+    val positionMs = player.positionMs.collectAsStateWithLifecycle()
     val durationMs by player.durationMs.collectAsStateWithLifecycle()
 
     // Prefer the currently playing track, fall back to the last played track so
     // the bar stays visible after stop() clears the current track.
     val display = track ?: lastPlayed ?: return
-    val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
 
     // Liquid-glass palette. The surface is a frosted translucent layer; a
     // top-down specular gradient adds the "wet" highlight that defines the glass
@@ -173,9 +177,14 @@ fun MiniPlayer(
                 modifier =
                     Modifier
                         .align(Alignment.BottomStart)
-                        .fillMaxWidth(progress)
+                        .fillMaxWidth()
                         .height(2.5.dp)
-                        .background(progressTint),
+                        .drawBehind {
+                            val progress = (positionMs.value.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                            val width = size.width * progress
+                            val left = if (layoutDirection == LayoutDirection.Rtl) size.width - width else 0f
+                            drawRect(progressTint, topLeft = Offset(left, 0f), size = Size(width, size.height))
+                        },
             )
         }
     }

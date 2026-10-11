@@ -431,21 +431,25 @@ private fun ToggleControlButton(
     icon: ImageVector,
     contentDescription: String,
 ) {
-    val glowAlpha by rememberInfiniteTransition(label = "toggleGlow").animateFloat(
-        initialValue = 0.16f,
-        targetValue = 0.4f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        label = "toggleGlowAlpha",
-    )
     val accent = MaterialTheme.colorScheme.primary
     val haloColor = MaterialTheme.colorScheme.onBackground
     IconButton(onClick = onClick) {
         Box(contentAlignment = Alignment.Center) {
             if (active) {
+                // Only exists while active -- an infinite transition requests a frame
+                // every vsync for as long as it's composed -- and is read inside
+                // drawBehind so the pulse just redraws the halo instead of recomposing.
+                val glowAlpha =
+                    rememberInfiniteTransition(label = "toggleGlow").animateFloat(
+                        initialValue = 0.16f,
+                        targetValue = 0.4f,
+                        animationSpec =
+                            infiniteRepeatable(
+                                animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse,
+                            ),
+                        label = "toggleGlowAlpha",
+                    )
                 Box(
                     modifier =
                         Modifier.size(40.dp).drawBehind {
@@ -456,7 +460,7 @@ private fun ToggleControlButton(
                             drawCircle(
                                 brush =
                                     Brush.radialGradient(
-                                        colors = listOf(haloColor.copy(alpha = glowAlpha), Color.Transparent),
+                                        colors = listOf(haloColor.copy(alpha = glowAlpha.value), Color.Transparent),
                                         radius = radius,
                                     ),
                                 radius = radius,
