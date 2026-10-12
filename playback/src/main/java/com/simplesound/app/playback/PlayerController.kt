@@ -14,6 +14,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.model.Track
+import com.simplesound.app.playback.eq.EqualizerController
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +47,8 @@ class PlayerController
     constructor(
         @ApplicationContext private val context: Context,
         private val repository: MusicRepository,
+        /** Equalizer (Now Playing > EQ), applied inside PlaybackService's audio chain. */
+        val equalizer: EqualizerController,
     ) {
         private var controller: MediaController? = null
         private var controllerFuture: ListenableFuture<MediaController>? = null

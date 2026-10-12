@@ -6,3 +6,7 @@ keystore/simplesound-debug.keystore binary
 # local build on a machine with core.autocrlf=true doesn't leave it showing as
 # modified — which would false-positive the deploy.ps1 / CI schema guard.
 data/schemas/**/*.json text eol=lf
+
+# Generated AutoEq data (scripts/autoeq/build_autoeq_db.py). Single-line JSON;
+# pin it so autocrlf never makes the monthly refresh PR show a phantom diff.
+data/src/main/assets/autoeq/*.json text eol=lf
