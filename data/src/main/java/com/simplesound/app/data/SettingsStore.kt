@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.simplesound.app.data.model.EdgeBarSide
+import com.simplesound.app.data.model.EqualizerSettings
 import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Tab
 import com.simplesound.app.data.model.TabSetting
@@ -73,6 +74,12 @@ class SettingsStore
             // layer), same reasoning as CROSSFADE_SECONDS above.
             val EDGE_BAR_ENABLED = booleanPreferencesKey("edge_bar_enabled")
             val EDGE_BAR_SIDE = stringPreferencesKey("edge_bar_side")
+
+            // Equalizer (Now Playing > EQ). Read by PlaybackService's audio chain via
+            // EqualizerController, same reasoning as CROSSFADE_SECONDS above.
+            val EQ_ENABLED = booleanPreferencesKey("eq_enabled")
+            val EQ_BANDS = stringPreferencesKey("eq_bands")
+            val EQ_HEADPHONE = stringPreferencesKey("eq_headphone")
         }
 
         val accent: Flow<AccentColor> =
@@ -103,6 +110,29 @@ class SettingsStore
             context.dataStore.data.map { prefs ->
                 (prefs[Keys.CROSSFADE_SECONDS] ?: 0).coerceIn(0, MAX_CROSSFADE_SECONDS)
             }
+
+        /** Equalizer state; off and flat by default. */
+        val equalizer: Flow<EqualizerSettings> =
+            context.dataStore.data.map { prefs ->
+                EqualizerSettings(
+                    enabled = prefs[Keys.EQ_ENABLED] ?: false,
+                    headphone = EqualizerCodec.decodeHeadphone(prefs[Keys.EQ_HEADPHONE]),
+                    bandGainsDb = EqualizerCodec.decodeBands(prefs[Keys.EQ_BANDS]),
+                )
+            }
+
+        suspend fun setEqualizer(settings: EqualizerSettings) {
+            context.dataStore.edit { prefs ->
+                prefs[Keys.EQ_ENABLED] = settings.enabled
+                prefs[Keys.EQ_BANDS] = EqualizerCodec.encodeBands(settings.bandGainsDb)
+                val headphone = settings.headphone
+                if (headphone == null) {
+                    prefs.remove(Keys.EQ_HEADPHONE)
+                } else {
+                    prefs[Keys.EQ_HEADPHONE] = EqualizerCodec.encodeHeadphone(headphone)
+                }
+            }
+        }
 
         /** Id of the playlist playback was last started from, or null if none yet. */
         val lastPlayedPlaylistId: Flow<String?> =

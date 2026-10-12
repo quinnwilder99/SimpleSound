@@ -16,7 +16,11 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSession.MediaItemsWithStartPosition
 import androidx.media3.session.MediaSessionService
@@ -26,6 +30,8 @@ import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.SettingsStore
 import com.simplesound.app.data.model.EdgeBarSide
 import com.simplesound.app.data.model.Track
+import com.simplesound.app.playback.eq.EqualizerAudioProcessor
+import com.simplesound.app.playback.eq.EqualizerController
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +47,8 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var settingsStore: SettingsStore
 
     @Inject lateinit var musicRepository: MusicRepository
+
+    @Inject lateinit var equalizer: EqualizerController
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
@@ -420,7 +428,7 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         player =
-            ExoPlayer.Builder(this)
+            ExoPlayer.Builder(this, equalizerRenderersFactory())
                 .setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA)
@@ -680,7 +688,8 @@ class PlaybackService : MediaSessionService() {
      *  enough that pooling isn't worth the extra state. Doesn't manage audio focus
      *  of its own (`player` already holds it for both). */
     private fun buildCrossfadePlayer(): ExoPlayer =
-        ExoPlayer.Builder(this)
+        // Same EQ as `player`, or the outgoing track's tail would audibly lose it.
+        ExoPlayer.Builder(this, equalizerRenderersFactory())
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -689,6 +698,26 @@ class PlaybackService : MediaSessionService() {
                 false,
             )
             .build()
+
+    /**
+     * Renderers whose audio sink runs an [EqualizerAudioProcessor] reading the live
+     * [EqualizerController] settings. Each player gets its own processor (filter
+     * memory is per stream); with the EQ off it passes audio straight through.
+     */
+    @androidx.annotation.OptIn(UnstableApi::class)
+    private fun equalizerRenderersFactory(): DefaultRenderersFactory =
+        object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): AudioSink =
+                DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf(EqualizerAudioProcessor { equalizer.settings.value }))
+                    .build()
+        }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         saveState(includeQueue = true)

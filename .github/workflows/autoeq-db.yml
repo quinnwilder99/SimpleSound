@@ -1,0 +1,61 @@
+name: AutoEq database
+
+# Rebuilds the bundled AutoEq headphone profile database
+# (data/src/main/assets/autoeq/autoeq_profiles.json) from upstream once a month
+# and proposes it as a PR, so the shipped copy only changes through review.
+on:
+  schedule:
+    - cron: "0 6 1 * *" # 06:00 UTC on the 1st of every month
+  workflow_dispatch:
+
+concurrency:
+  group: autoeq-db
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push the PR branch
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Only the ParametricEQ.txt files are needed; skipping the plots and raw
+      # measurements makes this a few MB instead of a multi-GB clone.
+      - name: Fetch AutoEq results
+        id: autoeq
+        run: |
+          git clone --depth 1 --filter=blob:none --no-checkout \
+            https://github.com/jaakkopasanen/AutoEq.git "$RUNNER_TEMP/AutoEq"
+          cd "$RUNNER_TEMP/AutoEq"
+          git sparse-checkout set --no-cone '/results/**/*ParametricEQ.txt' '/LICENSE'
+          git checkout
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build database
+        run: |
+          python3 -I scripts/autoeq/build_autoeq_db.py \
+            "$RUNNER_TEMP/AutoEq/results" \
+            data/src/main/assets/autoeq/autoeq_profiles.json \
+            --commit "${{ steps.autoeq.outputs.sha }}"
+          cp "$RUNNER_TEMP/AutoEq/LICENSE" data/src/main/assets/autoeq/LICENSE-AutoEq.txt
+
+      # Output is deterministic, so this is a no-op when upstream data didn't change.
+      - name: Open PR with refreshed data
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/autoeq-db-refresh
+          delete-branch: true
+          add-paths: data/src/main/assets/autoeq/
+          commit-message: "Refresh bundled AutoEq data (AutoEq@${{ steps.autoeq.outputs.sha }})"
+          title: "Refresh bundled AutoEq data"
+          body: |
+            Monthly refresh from jaakkopasanen/AutoEq@${{ steps.autoeq.outputs.sha }}.

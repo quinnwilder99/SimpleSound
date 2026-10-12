@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -83,7 +84,7 @@ import com.simplesound.app.util.shareTrack
 /**
  * Full-screen now-playing view. Opens when a track is tapped or when the mini-player
  * is pressed. Redesigned layout (top to bottom):
- *  1. Action bar (down arrow / speed / more)
+ *  1. Action bar (down arrow / equalizer / speed / more)
  *  2. Album art + track metadata (title / artist)
  *  3. Mid-tier utility row (queue / favorite / add to playlist)
  *  4. Scrubber + timestamps
@@ -106,6 +107,7 @@ fun NowPlayingScreen(
     val isShuffleOn by player.isShuffleOn.collectAsStateWithLifecycle()
     val repeatMode by player.repeatMode.collectAsStateWithLifecycle()
     val playbackSpeed by player.playbackSpeed.collectAsStateWithLifecycle()
+    val equalizer by player.equalizer.settings.collectAsStateWithLifecycle()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showActionsSheet by remember { mutableStateOf(false) }
@@ -114,6 +116,7 @@ fun NowPlayingScreen(
     val tagEditor = rememberTrackTagEditor(vm)
     var detailsTrack by remember { mutableStateOf(false) }
     var showSpeedSheet by remember { mutableStateOf(false) }
+    var showEqualizerSheet by remember { mutableStateOf(false) }
     var seekingValue by remember { mutableStateOf<Float?>(null) }
     // ---- Temp queue (Now Playing queue sheet) ----
     val queue by player.queue.collectAsStateWithLifecycle()
@@ -146,6 +149,18 @@ fun NowPlayingScreen(
                     )
                 }
                 Spacer(Modifier.weight(1f))
+                IconButton(onClick = { showEqualizerSheet = true }) {
+                    Icon(
+                        Icons.Rounded.Equalizer,
+                        contentDescription = "Equalizer",
+                        tint =
+                            if (equalizer.isActive) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onBackground
+                            },
+                    )
+                }
                 IconButton(onClick = { showSpeedSheet = true }) {
                     Icon(
                         Icons.Rounded.Speed,
@@ -401,6 +416,12 @@ fun NowPlayingScreen(
             currentSpeed = playbackSpeed,
             onSpeedChange = { player.setSpeed(it) },
             onDismiss = { showSpeedSheet = false },
+        )
+    }
+    if (showEqualizerSheet) {
+        EqualizerSheet(
+            controller = player.equalizer,
+            onDismiss = { showEqualizerSheet = false },
         )
     }
     if (showQueueSheet) {
