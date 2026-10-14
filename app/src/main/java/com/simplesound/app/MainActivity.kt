@@ -1,11 +1,13 @@
 package com.simplesound.app
 
 import android.Manifest
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,7 +43,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Always-dark app: light bar icons no matter what the system theme is.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
 
         requestPermissions.launch(requiredPermissions())
         holdSplashUntilReady()

@@ -1,6 +1,6 @@
 # simpleSOUND Privacy Policy
 
-**Effective & last updated:** September 17, 2026
+**Effective & last updated:** October 13, 2026
 **Applies to:** package `com.simplesound.app` on Google Play
 
 > This file is the canonical, published version of this policy. Link it as:
@@ -36,11 +36,28 @@ crash-reporting service.
 
 | Permission | What it's for | Leaves your device? |
 | --- | --- | --- |
-| `READ_MEDIA_AUDIO` | Finds the songs already stored on your device so the library can be built and played. | No |
+| `READ_MEDIA_AUDIO` (Android 13+) / `READ_EXTERNAL_STORAGE` (Android 12 and older) | Finds the songs already stored on your device so the library can be built and played. | No |
+| `WRITE_EXTERNAL_STORAGE` (Android 10 and older only) | Deletes a song's file, or saves edited song details into it, when you ask. Newer Android versions ask you to confirm each change in a system prompt instead. | No |
 | `POST_NOTIFICATIONS` | Shows the playback notification (title, artist, play/pause/skip) while music is playing. | No |
-| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Keeps music playing when the app is in the background, like every other music player. | No |
-| `WRITE_EXTERNAL_STORAGE` (Android 10 and older only) | Deletes a song's file when you choose Delete. Newer Android versions ask you to confirm each delete in a system prompt instead. | No |
-| `USE_FULL_SCREEN_INTENT` | Powers an optional lock-screen control bar (Settings → Edge control bar). Off by default; only used if you turn it on. | No |
+| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Keeps music playing when the app is in the background, like every other music player. | No |
+| `WAKE_LOCK` | Keeps the processor awake while music plays with the screen off, so playback doesn't stall. | No |
+| `USE_FULL_SCREEN_INTENT` | Powers an optional lock-screen control bar (Settings → Edge control bar). Off by default; on Android 14 and newer it also needs you to allow it in system settings. | No |
+| `RECEIVE_BOOT_COMPLETED`, `ACCESS_NETWORK_STATE` | Added automatically by Android's WorkManager library, which the app uses to refresh your library in the background when songs are added or removed. The app does not use the network: it has no `INTERNET` permission. | No |
+
+## What the app reads and writes on your device
+
+- **Your audio files** are read to play them and to show their title, artist,
+  album and embedded artwork.
+- **Editing a song's details** (title, artist, album) writes the new text into
+  that song's file on your device. **Deleting** a song deletes its file. Both
+  only happen when you ask, and Android 11+ shows its own confirmation first.
+- **Playlist cover photos** are chosen through Android's photo picker, which
+  only gives the app the one photo you pick. A cropped copy is saved in the
+  app's private storage.
+- **Sharing** a song hands the file to the app you pick in Android's share
+  sheet; simpleSOUND sends nothing itself.
+- **Links** in Settings → About (this policy, the developer's portfolio) open
+  in your web browser, outside the app.
 
 ## Where your data lives
 
@@ -49,7 +66,9 @@ app sandbox, and is never transmitted:
 
 - Playlists, favorites, and play history — a local database on your device.
 - The last-played track, queue, and resume position.
-- Preferences such as accent color, tab layout, and crossfade duration.
+- Preferences such as accent color, tab layout, crossfade duration, and
+  equalizer settings. The headphone-correction presets are built into the app
+  and work offline.
 
 If you use Android's own backup or phone-transfer feature, this data travels
 the same way any app's private data does under your Google account's

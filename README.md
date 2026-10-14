@@ -245,7 +245,7 @@ Contains shared code used across modules:
 | Static Analysis       | ktlint + detekt                   |
 | CI/CD                 | GitHub Actions                     |
 | Min SDK               | 26                                 |
-| Target SDK            | 35                                 |
+| Target SDK            | 36                                 |
 
 ---
 

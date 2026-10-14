@@ -139,10 +139,20 @@ fun AboutScreen(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            // MIT attribution for the bundled headphone-correction data
+            // (data/src/main/assets/autoeq/LICENSE-AutoEq.txt).
+            Text(
+                text =
+                    "Headphone corrections in the equalizer come from AutoEq by " +
+                        "Jaakko Pasanen, used under the MIT License.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             Spacer(Modifier.size(8.dp))
 
             Text(
-                text = "Version: ${versionName?.let { "v$it" } ?: "unknown"}",
+                text = "Version:${versionName?.let { "v$it" } ?: "unknown"}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Medium,

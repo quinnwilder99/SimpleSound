@@ -53,12 +53,12 @@ val gitCommitCount: Int =
 
 android {
     namespace = "com.simplesound.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.simplesound.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = maxOf(gitCommitCount, versionCodeFloor)
         versionName = "1.2.0"
         vectorDrawables { useSupportLibrary = true }

@@ -49,10 +49,13 @@ fun SimpleSoundTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
+            // Bars are transparent (edge-to-edge, enforced from Android 15); only keep
+            // their icons light on the always-dark content behind them.
             val window = (view.context as Activity).window
-            window.statusBarColor = SoundColors.Background.value.toInt()
-            window.navigationBarColor = SoundColors.Background.value.toInt()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = false
+                isAppearanceLightNavigationBars = false
+            }
         }
     }
 

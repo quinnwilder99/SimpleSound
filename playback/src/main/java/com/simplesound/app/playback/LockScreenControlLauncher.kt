@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.media3.common.Player
@@ -98,7 +99,8 @@ class LockScreenControlLauncher(
             enabled &&
                 screenOn &&
                 keyguardManager.isKeyguardLocked &&
-                player.mediaItemCount > 0
+                player.mediaItemCount > 0 &&
+                canUseFullScreenIntent(context)
         if (!shouldShow) {
             firedThisCycle = false
             notificationManager.cancel(NOTIFICATION_ID)
@@ -153,6 +155,16 @@ class LockScreenControlLauncher(
         private const val CHANNEL_ID = "edge_control_bar"
         private const val NOTIFICATION_ID = 421
         private const val REQUEST_CODE = 421
+
+        /** Whether a full-screen intent will actually launch the control screen. On
+         *  Android 14+ Google Play only pre-grants USE_FULL_SCREEN_INTENT to calling and
+         *  alarm apps, so a Play install starts without it and the user has to allow it
+         *  in Settings > Edge control bar. Without it the notification would just sit in
+         *  the shade as a heads-up on every screen-on, so [refresh] posts nothing and the
+         *  standard media notification stays the lock-screen control. */
+        fun canUseFullScreenIntent(context: Context): Boolean =
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+                context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
 
         /** Cancels the triggering notification. `LockScreenControlActivity` calls this from
          *  its onCreate so the notification never lingers in the shade once the screen it

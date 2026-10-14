@@ -1,5 +1,9 @@
 package com.simplesound.app.ui.screens.settings
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,13 +28,19 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.data.model.EdgeBarSide
+import com.simplesound.app.playback.LockScreenControlLauncher
 import com.simplesound.app.ui.AppViewModel
 
 /**
@@ -40,12 +50,13 @@ import com.simplesound.app.ui.AppViewModel
  * [com.simplesound.app.playback.LockScreenControlLauncher]), or turn it off to
  * keep using the default one.
  *
- * No special permission is needed -- unlike this feature's first design (a
- * `SYSTEM_ALERT_WINDOW` overlay), which turned out not to work over a secure
- * keyguard at all. Showing custom UI over a secure lock screen now means a
- * real `Activity`, which fully occupies the screen while it's up (see
- * `LockScreenControlActivity` / `LockControlScreen`), so the copy below is
- * upfront about that trade-off rather than calling it just an "edge bar".
+ * Showing custom UI over a secure lock screen means a real `Activity`, which
+ * fully occupies the screen while it's up (see `LockScreenControlActivity` /
+ * `LockControlScreen`), so the copy below is upfront about that trade-off rather
+ * than calling it just an "edge bar". The Activity is launched by a full-screen
+ * notification intent, which on Android 14+ Play installs needs the user to allow
+ * "full screen notifications" by hand; the row below asks for it while it's
+ * missing and the bar stays inactive until then.
  */
 @Composable
 fun EdgeControlBarScreen(
@@ -54,6 +65,13 @@ fun EdgeControlBarScreen(
 ) {
     val enabled by vm.edgeControlBarEnabled.collectAsStateWithLifecycle()
     val side by vm.edgeControlBarSide.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    // Re-checked on every resume: the grant happens on a system Settings page.
+    var fullScreenAllowed by remember { mutableStateOf(LockScreenControlLauncher.canUseFullScreenIntent(context)) }
+    LifecycleResumeEffect(Unit) {
+        fullScreenAllowed = LockScreenControlLauncher.canUseFullScreenIntent(context)
+        onPauseOrDispose {}
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -135,6 +153,40 @@ fun EdgeControlBarScreen(
                             uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
                         ),
                 )
+            }
+
+            if (enabled && !fullScreenAllowed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                Spacer(Modifier.size(12.dp))
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                            }
+                            .padding(horizontal = 16.dp, vertical = 16.dp),
+                ) {
+                    Text(
+                        text = "Allow full screen notifications",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text =
+                            "Android needs this to show the control bar over the lock screen. " +
+                                "Until it's allowed, the normal media controls are used.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             Spacer(Modifier.size(28.dp))
