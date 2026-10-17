@@ -13,7 +13,6 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
-import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
@@ -30,6 +29,7 @@ import com.simplesound.app.data.MusicRepository
 import com.simplesound.app.data.SettingsStore
 import com.simplesound.app.data.model.EdgeBarSide
 import com.simplesound.app.data.model.Track
+import com.simplesound.app.playback.crossfade.CrossfadeEngine
 import com.simplesound.app.playback.eq.EqualizerAudioProcessor
 import com.simplesound.app.playback.eq.EqualizerController
 import dagger.hilt.android.AndroidEntryPoint
@@ -39,6 +39,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -131,28 +132,45 @@ class PlaybackService : MediaSessionService() {
     private val sleepHandler = Handler(Looper.getMainLooper())
     private var sleepRunnable: Runnable? = null
 
-    // ---- Crossfade (Samsung Music-style track-to-track overlap) ----
-    // `player` stays the single source of truth for the MediaSession/notification/
-    // queue for the whole app; crossfading a "shadow" ExoPlayer plays out the tail
-    // of the outgoing track while `player` itself is jumped forward to the next
-    // item early and ramped up from silence, so nothing about queue ownership or
-    // session wiring changes. See maybeStartCrossfade() for the full walkthrough.
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private var crossfadeSeconds: Int = 0
-    private var crossfadePlayer: ExoPlayer? = null
-    private var crossfadeRampRunnable: Runnable? = null
-    private var crossfadeWatchRunnable: Runnable? = null
+
+    // ---- Crossfade ----
+    // Two decks: at each fade the engine hands the session a pre-warmed player already
+    // on the next track (swapPlayer below) while the old one plays out its tail. So
+    // `player` is whichever deck is current, and everything session-level is attached
+    // through playerListeners so it can move with it.
+    private lateinit var crossfade: CrossfadeEngine
+
+    private val playerAudioAttributes =
+        AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .build()
+
+    private val crossfadeHost =
+        object : CrossfadeEngine.Host {
+            override val sessionPlayer: ExoPlayer get() = player
+
+            override fun buildDeck(): ExoPlayer = buildPlayer(handleAudioFocus = false)
+
+            override fun handOver(incoming: ExoPlayer) = swapPlayer(incoming)
+        }
+
+    /** Every listener that follows the session player across a crossfade swap. */
+    private val playerListeners: List<Player.Listener> by lazy {
+        listOf(
+            crossfade.sessionListener,
+            playRecordListener,
+            errorRecoveryListener,
+            stateSaveListener,
+            lockScreenControlListener,
+        )
+    }
 
     // Mirrored locally so each settings collector below can pass LockScreenControlLauncher
     // both values together without waiting on the other flow to also emit.
     private var edgeBarEnabled: Boolean = true
     private var edgeBarSide: EdgeBarSide = EdgeBarSide.Default
-
-    // Set right before *we* programmatically skip `player` ahead to start a
-    // crossfade, so the resulting onMediaItemTransition callback (fired for that
-    // same skip) isn't mistaken for a user-initiated skip and doesn't cancel the
-    // fade it just started.
-    private var suppressNextTransitionCancel = false
 
     // ---- Play-stats recording ("Recently played" / "Most played") ----
     // A track only counts as "played" once it has actually been listened to for
@@ -366,89 +384,18 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
-    private val crossfadeListener =
-        object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) {
-                    startCrossfadeWatcher()
-                    return
-                }
-                stopCrossfadeWatcher()
-                // isPlaying also dips false for a moment while a new item buffers --
-                // notably right after our own seekToNextMediaItem() below, which would
-                // otherwise cancel the fade it just started. playWhenReady tells the
-                // two apart: only a genuine pause (user, sleep timer) clears it, so
-                // the app lands cleanly rather than stuck partway through a fade the
-                // user can't see progressing.
-                if (!player.playWhenReady) cancelActiveCrossfade()
-            }
-
-            // The watcher sleeps until the computed fade point, so anything that moves
-            // that point (seek, new item, speed, a duration becoming known) re-arms it.
-            override fun onPositionDiscontinuity(
-                oldPosition: Player.PositionInfo,
-                newPosition: Player.PositionInfo,
-                reason: Int,
-            ) = rearmCrossfadeWatcher()
-
-            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) = rearmCrossfadeWatcher()
-
-            override fun onTimelineChanged(
-                timeline: Timeline,
-                reason: Int,
-            ) = rearmCrossfadeWatcher()
-
-            override fun onMediaItemTransition(
-                mediaItem: MediaItem?,
-                reason: Int,
-            ) {
-                rearmCrossfadeWatcher()
-                if (suppressNextTransitionCancel) {
-                    // This is the transition *we* caused by seeking `player` ahead in
-                    // maybeStartCrossfade() -- the fade is already running, so leave it be.
-                    suppressNextTransitionCancel = false
-                    return
-                }
-                // Any other transition (user tapped next/previous, the track ended
-                // naturally with crossfade off, a queue edit) means a fade already in
-                // flight is now describing a track we've left -- drop it immediately
-                // rather than let a stale shadow player keep talking underneath.
-                cancelActiveCrossfade()
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                cancelActiveCrossfade()
-            }
-        }
-
     private val sleepPrefs by lazy {
         getSharedPreferences(SLEEP_PREFS, android.content.Context.MODE_PRIVATE)
     }
 
     override fun onCreate() {
         super.onCreate()
-        player =
-            ExoPlayer.Builder(this, equalizerRenderersFactory())
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(C.USAGE_MEDIA)
-                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                        .build(),
-                    true,
-                )
-                .setHandleAudioBecomingNoisy(true)
-                // Keeps the CPU awake while playing so the player (and the crossfade
-                // timer) keep running with the screen off. Audio offload is deliberately
-                // not used: on the Pixel it left playback stuck "playing" in silence
-                // ~20 min into a screen-off session, with Play unable to recover it.
-                .setWakeMode(C.WAKE_MODE_LOCAL)
-                .build()
+        player = buildPlayer(handleAudioFocus = true)
         player.shuffleModeEnabled = musicRepository.lastShuffleEnabled()
         player.repeatMode = savedToRepeatMode(musicRepository.lastRepeatMode())
-        player.addListener(crossfadeListener)
-        player.addListener(playRecordListener)
-        player.addListener(errorRecoveryListener)
-        player.addListener(stateSaveListener)
+        crossfade = CrossfadeEngine(this, serviceScope, playerAudioAttributes, crossfadeHost)
+        lockScreenControl = LockScreenControlLauncher(this) { player }
+        playerListeners.forEach(player::addListener)
         mediaSession =
             MediaSession.Builder(this, player)
                 .setBitmapLoader(TrackArtworkBitmapLoader(this))
@@ -457,8 +404,6 @@ class PlaybackService : MediaSessionService() {
         restoreSleepTimerIfNeeded()
         restoreSavedQueueIfEmpty()
 
-        lockScreenControl = LockScreenControlLauncher(this, player)
-        player.addListener(lockScreenControlListener)
         ContextCompat.registerReceiver(
             this,
             screenStateReceiver,
@@ -471,10 +416,8 @@ class PlaybackService : MediaSessionService() {
         )
 
         serviceScope.launch {
-            settingsStore.crossfadeSeconds.collect { seconds ->
-                crossfadeSeconds = seconds
-                if (seconds <= 0) cancelActiveCrossfade()
-                rearmCrossfadeWatcher()
+            combine(settingsStore.crossfadeSeconds, settingsStore.crossfadeSmart, ::Pair).collect { (seconds, smart) ->
+                crossfade.setSettings(seconds, smart)
             }
         }
         serviceScope.launch {
@@ -556,148 +499,40 @@ class PlaybackService : MediaSessionService() {
         sleepHandler.postDelayed(r, remaining)
     }
 
-    // ---- Crossfade ----
-
-    /** Catches the moment the current track enters its last [crossfadeSeconds], only
-     *  while playing with crossfade on. Rather than polling the whole track (a 5 Hz
-     *  wake-up for all of playback, even with crossfade off) it sleeps until
-     *  [CROSSFADE_LEAD_MS] before the fade point and polls finely only from there;
-     *  listeners re-arm it when that point moves. */
-    private fun startCrossfadeWatcher() {
-        stopCrossfadeWatcher()
-        if (crossfadeSeconds <= 0) return
-        val r =
-            object : Runnable {
-                override fun run() {
-                    maybeStartCrossfade()
-                    // maybeStartCrossfade()'s own skip re-arms the watcher through the
-                    // listeners; only keep going if that didn't replace this runnable.
-                    if (crossfadeWatchRunnable === this) sleepHandler.postDelayed(this, nextCrossfadeCheckDelayMs())
-                }
-            }
-        crossfadeWatchRunnable = r
-        sleepHandler.postDelayed(r, nextCrossfadeCheckDelayMs())
-    }
-
-    private fun rearmCrossfadeWatcher() {
-        if (player.isPlaying) startCrossfadeWatcher() else stopCrossfadeWatcher()
-    }
-
-    private fun nextCrossfadeCheckDelayMs(): Long {
-        val duration = player.duration
-        if (duration <= 0 || duration == C.TIME_UNSET) return CROSSFADE_POLL_MS
-        val effectiveMs = minOf(crossfadeSeconds * 1_000L, duration / 2)
-        val sleepMs = duration - player.currentPosition - effectiveMs - CROSSFADE_LEAD_MS
-        val speed = player.playbackParameters.speed.takeIf { it > 0f } ?: 1f
-        return (sleepMs / speed).toLong().coerceAtLeast(CROSSFADE_POLL_MS)
-    }
-
-    private fun stopCrossfadeWatcher() {
-        crossfadeWatchRunnable?.let { sleepHandler.removeCallbacks(it) }
-        crossfadeWatchRunnable = null
-    }
+    // ---- Players ----
 
     /**
-     * Checks whether `player` has just entered the last [crossfadeSeconds] of the
-     * current track and, if so, kicks off the overlap: a shadow [ExoPlayer] takes
-     * over playing out the outgoing track from the current position while `player`
-     * itself is jumped forward to the next item, muted, and ramped back up --
-     * [rampCrossfade] fades the two against each other. `player` remains the one
-     * true source for the MediaSession the whole time, so the notification/queue/
-     * UI simply see it "skip ahead" a few seconds early rather than anything more
-     * invasive.
+     * The session player and every crossfade deck come from here, so they share the EQ,
+     * wake mode and noisy-output handling. Only the session player holds audio focus;
+     * a deck gets it when the crossfade engine hands it over.
      */
-    private fun maybeStartCrossfade() {
-        if (crossfadeSeconds <= 0) return
-        if (crossfadePlayer != null) return // a fade is already running
-        if (player.repeatMode == Player.REPEAT_MODE_ONE) return
-        if (!player.hasNextMediaItem()) return
-        val duration = player.duration
-        if (duration <= 0 || duration == C.TIME_UNSET) return
-        // Never overlap more than half the track -- guards very short tracks
-        // against a "crossfade" that's really the whole song playing twice.
-        val effectiveMs = minOf(crossfadeSeconds * 1_000L, duration / 2)
-        if (effectiveMs <= 0) return
-        val remaining = duration - player.currentPosition
-        if (remaining !in 0..effectiveMs) return
-
-        val outgoingItem = player.currentMediaItem ?: return
-        val outgoingPosition = player.currentPosition
-        val startVolume = player.volume
-
-        val shadow = buildCrossfadePlayer()
-        shadow.setMediaItem(outgoingItem, outgoingPosition)
-        shadow.volume = startVolume
-        shadow.prepare()
-        shadow.play()
-        crossfadePlayer = shadow
-
-        suppressNextTransitionCancel = true
-        player.volume = 0f
-        player.seekToNextMediaItem()
-
-        rampCrossfade(effectiveMs, shadow, startVolume)
-    }
-
-    /** Linearly fades `player` in (0 -> [targetVolume]) while fading [shadow] out, in 50ms steps. */
-    private fun rampCrossfade(
-        durationMs: Long,
-        shadow: ExoPlayer,
-        targetVolume: Float,
-    ) {
-        val steps = (durationMs / 50L).coerceAtLeast(1)
-        var step = 0
-        val r =
-            object : Runnable {
-                override fun run() {
-                    if (crossfadePlayer !== shadow) return // superseded/cancelled
-                    step++
-                    val t = (step.toFloat() / steps).coerceIn(0f, 1f)
-                    player.volume = t * targetVolume
-                    shadow.volume = (1f - t) * targetVolume
-                    if (t >= 1f) {
-                        finishCrossfade(shadow)
-                    } else {
-                        crossfadeRampRunnable = this
-                        sleepHandler.postDelayed(this, 50L)
-                    }
-                }
-            }
-        crossfadeRampRunnable = r
-        sleepHandler.postDelayed(r, 50L)
-    }
-
-    private fun finishCrossfade(shadow: ExoPlayer) {
-        crossfadeRampRunnable?.let { sleepHandler.removeCallbacks(it) }
-        crossfadeRampRunnable = null
-        if (crossfadePlayer === shadow) crossfadePlayer = null
-        shadow.release()
-        player.volume = 1f
-    }
-
-    /** Stops and releases any fade in flight, snapping `player` back to full volume. */
-    private fun cancelActiveCrossfade() {
-        crossfadeRampRunnable?.let { sleepHandler.removeCallbacks(it) }
-        crossfadeRampRunnable = null
-        crossfadePlayer?.release()
-        crossfadePlayer = null
-        player.volume = 1f
-    }
-
-    /** Built fresh per fade and released when it ends -- crossfades are infrequent
-     *  enough that pooling isn't worth the extra state. Doesn't manage audio focus
-     *  of its own (`player` already holds it for both). */
-    private fun buildCrossfadePlayer(): ExoPlayer =
-        // Same EQ as `player`, or the outgoing track's tail would audibly lose it.
+    private fun buildPlayer(handleAudioFocus: Boolean): ExoPlayer =
         ExoPlayer.Builder(this, equalizerRenderersFactory())
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .build(),
-                false,
-            )
+            .setAudioAttributes(playerAudioAttributes, handleAudioFocus)
+            .setHandleAudioBecomingNoisy(true)
+            // Keeps the CPU awake while playing so the player (and the crossfade
+            // timer) keep running with the screen off. Audio offload is deliberately
+            // not used: on the Pixel it left playback stuck "playing" in silence
+            // ~20 min into a screen-off session, with Play unable to recover it.
+            .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+
+    /**
+     * Crossfade hand-over: [incoming] (already on the next track) becomes the session
+     * player. The session-level listeners never saw it change track -- that happened
+     * on a deck they weren't attached to -- so they're told about the transition here.
+     */
+    private fun swapPlayer(incoming: ExoPlayer) {
+        val outgoing = player
+        playerListeners.forEach(outgoing::removeListener)
+        player = incoming
+        playerListeners.forEach(incoming::addListener)
+        mediaSession?.player = incoming
+        playerListeners.forEach {
+            it.onMediaItemTransition(incoming.currentMediaItem, Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)
+            it.onIsPlayingChanged(incoming.isPlaying)
+        }
+    }
 
     /**
      * Renderers whose audio sink runs an [EqualizerAudioProcessor] reading the live
@@ -732,8 +567,7 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         saveState(includeQueue = true)
         sleepHandler.removeCallbacks(positionSaver)
-        stopCrossfadeWatcher()
-        cancelActiveCrossfade()
+        crossfade.release()
         cancelScheduledRecordPlay()
         // Unlike onTaskRemoved, onDestroy can run without onTaskRemoved having run
         // first (e.g. system-initiated teardown while a sleep timer is armed). Without
@@ -762,11 +596,6 @@ class PlaybackService : MediaSessionService() {
          *  periodic save only bounds what a process kill mid-playback can lose, so it is
          *  kept infrequent. */
         private const val SAVE_POSITION_INTERVAL_MS = 15_000L
-
-        /** How long before a track's crossfade point the watcher switches from one long
-         *  sleep to fine polling, absorbing position-estimate drift. */
-        private const val CROSSFADE_LEAD_MS = 1_000L
-        private const val CROSSFADE_POLL_MS = 200L
 
         /** Saved repeat encoding (0 = off, 1 = all, 2 = one) <-> [Player] constants. */
         private fun repeatModeToSaved(mode: Int): Int =

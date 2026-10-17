@@ -98,7 +98,7 @@ Features:
 * Media session integration
 * ExoPlayer-based audio engine
 * **Queue** — view and reorder the current play queue on the fly without touching the source playlist
-* **Crossfade** — smoothly blend the end of one track into the start of the next, with adjustable duration (0–12s, presets or custom)
+* **Crossfade** — smoothly blend the end of one track into the start of the next, with adjustable duration (0–12s, presets or custom). Two-deck engine with equal-power curves; optional *smart transitions* skip trailing/leading silence and keep same-album segues gapless
 * **Equalizer** — 10-band graphic EQ with presets, plus [AutoEq](https://github.com/jaakkopasanen/AutoEq) headphone correction for ~6,000 models (bundled, works offline). Runs inside the player, so it applies on every output (wired, Bluetooth, USB) and never clips
 * **Sleep timer** — auto-pause playback after a preset or custom duration (up to 12 hours), with a live countdown
 * Mini player that follows you across tabs, expandable into the full Now Playing screen

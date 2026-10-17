@@ -68,6 +68,10 @@ class SettingsStore
             // even while the app's Activity/ViewModel isn't alive.
             val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
 
+            // "Smart transitions": trim silence at track edges and keep album segues
+            // gapless when crossfading (on by default). Read by PlaybackService.
+            val CROSSFADE_SMART = booleanPreferencesKey("crossfade_smart")
+
             // "Edge control bar": a slim vertical play/next/previous bar docked to a
             // screen edge, shown on the lock screen instead of the default Android
             // media notification. Read directly by PlaybackService (not just the UI
@@ -110,6 +114,11 @@ class SettingsStore
             context.dataStore.data.map { prefs ->
                 (prefs[Keys.CROSSFADE_SECONDS] ?: 0).coerceIn(0, MAX_CROSSFADE_SECONDS)
             }
+
+        /** Whether crossfades are timed from the audio itself (silence trimmed, album
+         *  segues left gapless) rather than a fixed point before the end; true by default. */
+        val crossfadeSmart: Flow<Boolean> =
+            context.dataStore.data.map { prefs -> prefs[Keys.CROSSFADE_SMART] ?: true }
 
         /** Equalizer state; off and flat by default. */
         val equalizer: Flow<EqualizerSettings> =
@@ -160,6 +169,10 @@ class SettingsStore
 
         suspend fun setCrossfadeSeconds(seconds: Int) {
             context.dataStore.edit { it[Keys.CROSSFADE_SECONDS] = seconds.coerceIn(0, MAX_CROSSFADE_SECONDS) }
+        }
+
+        suspend fun setCrossfadeSmart(enabled: Boolean) {
+            context.dataStore.edit { it[Keys.CROSSFADE_SMART] = enabled }
         }
 
         /** Whether the lock-screen edge control bar is on; false (the default) until the
