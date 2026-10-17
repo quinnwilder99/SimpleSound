@@ -100,6 +100,11 @@ class AppViewModel
             settings.crossfadeSeconds
                 .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
+        /** Whether crossfades skip silence and leave album segues gapless. */
+        val crossfadeSmart =
+            settings.crossfadeSmart
+                .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
         /** Whether the lock-screen edge control bar replaces the default Android media
          *  notification; true by default. The overlay itself lives in PlaybackService. */
         val edgeControlBarEnabled =
@@ -177,6 +182,8 @@ class AppViewModel
         fun setPlaylistsTabSort(option: SortOption) = viewModelScope.launch { settings.setPlaylistsTabSort(option) }
 
         fun setCrossfadeSeconds(seconds: Int) = viewModelScope.launch { settings.setCrossfadeSeconds(seconds) }
+
+        fun setCrossfadeSmart(enabled: Boolean) = viewModelScope.launch { settings.setCrossfadeSmart(enabled) }
 
         fun setEdgeControlBarEnabled(enabled: Boolean) = viewModelScope.launch { settings.setEdgeBarEnabled(enabled) }
 

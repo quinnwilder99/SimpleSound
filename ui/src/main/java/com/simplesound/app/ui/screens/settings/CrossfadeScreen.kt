@@ -24,6 +24,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -53,6 +55,7 @@ fun CrossfadeScreen(
     onBack: () -> Unit,
 ) {
     val seconds by vm.crossfadeSeconds.collectAsStateWithLifecycle()
+    val smart by vm.crossfadeSmart.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -178,6 +181,58 @@ fun CrossfadeScreen(
                     }
                 }
             }
+
+            Spacer(Modifier.size(28.dp))
+
+            SmartTransitionsRow(enabled = seconds > 0, checked = smart, onCheckedChange = vm::setCrossfadeSmart)
         }
+    }
+}
+
+/** Toggle for silence-aware fade timing; greyed out while crossfade itself is off. */
+@Composable
+private fun SmartTransitionsRow(
+    enabled: Boolean,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = "Smart transitions",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text =
+                    "Listens to each song's ending and the next one's intro: skips silence " +
+                        "and fades where the music actually ends. Songs on the same album that " +
+                        "run into each other stay gapless.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+            )
+        }
+        Spacer(Modifier.size(12.dp))
+        Switch(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange,
+            colors =
+                SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.background,
+                ),
+        )
     }
 }

@@ -53,7 +53,7 @@ import com.simplesound.app.data.model.EdgeBarSide
  */
 class LockScreenControlLauncher(
     private val context: Context,
-    private val player: Player,
+    private val player: () -> Player,
 ) {
     private val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
     private val notificationManager = NotificationManagerCompat.from(context)
@@ -98,7 +98,7 @@ class LockScreenControlLauncher(
             enabled &&
                 screenOn &&
                 keyguardManager.isKeyguardLocked &&
-                player.mediaItemCount > 0
+                player().mediaItemCount > 0
         if (!shouldShow) {
             firedThisCycle = false
             notificationManager.cancel(NOTIFICATION_ID)

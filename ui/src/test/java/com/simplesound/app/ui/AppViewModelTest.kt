@@ -52,6 +52,7 @@ class AppViewModelTest {
                 every { tracksSort } returns flowOf(SortOption.DATE_ADDED)
                 every { playlistsTabSort } returns flowOf(SortOption.CUSTOM_ORDER)
                 every { crossfadeSeconds } returns flowOf(0)
+                every { crossfadeSmart } returns flowOf(true)
             }
         repository =
             mockk(relaxed = true) {
