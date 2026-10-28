@@ -1,11 +1,5 @@
 package com.simplesound.app.ui.screens.nowplaying
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -442,7 +436,7 @@ fun NowPlayingScreen(
  * A playback toggle (shuffle / repeat) whose "on" state is shown with more than
  * just an accent tint. When the accent color is close to the background
  * (grey / black / white themes) a tinted icon alone is easy to miss, so an
- * active button also gets a soft persistent disc plus a gently pulsing halo
+ * active button also gets a soft persistent disc plus a static halo
  * behind it — both drawn in [onBackground] so they read regardless of accent.
  */
 @Composable
@@ -457,31 +451,21 @@ private fun ToggleControlButton(
     IconButton(onClick = onClick) {
         Box(contentAlignment = Alignment.Center) {
             if (active) {
-                // Only exists while active -- an infinite transition requests a frame
-                // every vsync for as long as it's composed -- and is read inside
-                // drawBehind so the pulse just redraws the halo instead of recomposing.
-                val glowAlpha =
-                    rememberInfiniteTransition(label = "toggleGlow").animateFloat(
-                        initialValue = 0.16f,
-                        targetValue = 0.4f,
-                        animationSpec =
-                            infiniteRepeatable(
-                                animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
-                                repeatMode = RepeatMode.Reverse,
-                            ),
-                        label = "toggleGlowAlpha",
-                    )
+                // A static halo, not a pulse: any animation here redraws the whole
+                // window for as long as Now Playing is open with shuffle or repeat on,
+                // which was the bulk of this screen's CPU and heated the phone over a
+                // long listen. Static, the screen only redraws on the progress tick.
                 Box(
                     modifier =
                         Modifier.size(40.dp).drawBehind {
                             val radius = size.minDimension / 2f
                             // Persistent soft disc: the color-independent "selected" cue.
                             drawCircle(color = haloColor.copy(alpha = 0.14f), radius = radius * 0.78f)
-                            // Gently pulsing halo: the glow.
+                            // Soft halo: the glow.
                             drawCircle(
                                 brush =
                                     Brush.radialGradient(
-                                        colors = listOf(haloColor.copy(alpha = glowAlpha.value), Color.Transparent),
+                                        colors = listOf(haloColor.copy(alpha = GLOW_ALPHA), Color.Transparent),
                                         radius = radius,
                                     ),
                                 radius = radius,
@@ -590,3 +574,6 @@ private fun PlaybackSpeedSheet(
         }
     }
 }
+
+/** Toggle halo strength: the midpoint of the old 0.16-0.4 pulse. */
+private const val GLOW_ALPHA = 0.28f

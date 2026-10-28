@@ -390,9 +390,15 @@ class PlayerController
                 object : Runnable {
                     override fun run() {
                         val c = controller ?: return
-                        _positionMs.value = c.currentPosition.coerceAtLeast(0)
+                        val pos = c.currentPosition.coerceAtLeast(0)
+                        _positionMs.value = pos
                         c.duration.takeIf { it > 0 }?.let { _durationMs.value = it }
-                        mainHandler.postDelayed(this, 500L)
+                        // Every position change redraws the whole window, and the UI only
+                        // shows whole seconds, so wake just past the next second boundary
+                        // (in wall time, hence the speed) instead of on a fixed interval.
+                        val speed = c.playbackParameters.speed.takeIf { it > 0f } ?: 1f
+                        val toNextSecond = ((1_000L - pos % 1_000L) / speed).toLong()
+                        mainHandler.postDelayed(this, toNextSecond + PROGRESS_TICK_SLACK_MS)
                     }
                 }
             progressRunnable = r
@@ -447,5 +453,8 @@ class PlayerController
             const val ACTION_SET_SLEEP_TIMER = "com.simplesound.app.SET_SLEEP_TIMER"
             const val ACTION_CANCEL_SLEEP_TIMER = "com.simplesound.app.CANCEL_SLEEP_TIMER"
             const val EXTRA_MINUTES = "minutes"
+
+            /** Lands each progress tick safely past the second boundary it targets. */
+            private const val PROGRESS_TICK_SLACK_MS = 20L
         }
     }

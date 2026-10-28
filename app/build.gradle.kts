@@ -101,6 +101,17 @@ android {
                 "proguard-rules.pro",
             )
         }
+        // What scripts/deploy.ps1 installs on the phone: a release-optimized build
+        // (not debuggable, so ART compiles it properly instead of running Compose,
+        // ExoPlayer and the EQ in debuggable mode -- much less CPU, much less heat)
+        // but signed with the SAME committed debug key as before, so it still
+        // updates the installed app in place and keeps playlists/history.
+        create("sideload") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            isProfileable = true
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {
