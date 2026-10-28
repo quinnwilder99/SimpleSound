@@ -10,16 +10,22 @@ mini-player resume point, and your settings. It only changes the app's code.
 powershell -ExecutionPolicy Bypass -File scripts\deploy.ps1
 ```
 
-That's it. The script builds `:app:assembleDebug`, checks it is safe to install
-over what's already on the phone, and runs `adb install -r` (reinstall, keep
-data). It refuses and explains itself if anything would cause data loss.
+That's it. The script builds `:app:assembleSideload`, checks it is safe to install
+over what's already on the phone, runs `adb install -r` (reinstall, keep
+data), then compiles the app ahead of time. It refuses and explains itself if
+anything would cause data loss.
+
+`sideload` is the release build (optimized, **not debuggable**) signed with the
+committed debug key. Don't go back to installing `assembleDebug` for daily use: a
+debuggable app runs much slower and kept the phone noticeably warm during long
+playback. Same key, so switching between the two still updates in place.
 
 Options:
 
 | Flag | Meaning |
 | --- | --- |
 | `-Serial <serial>` | Pick a device when more than one is connected. |
-| `-SkipBuild` | Install the APK already in `app/build/outputs/apk/debug/`. |
+| `-SkipBuild` | Install the APK already in `app/build/outputs/apk/sideload/`. |
 | `-Force` | Proceed even though `data/schemas/` changed (only if a Room `Migration` is in place, see below). |
 
 > Commit these changes first: the schema guard compares `data/schemas/` against
@@ -109,7 +115,7 @@ Nothing — the keystore and everything else is in the repo. Just connect the ph
 
 ## Building for the Play Store (a different signing key)
 
-Everything above is about the debug build that gets sideloaded onto your own
+Everything above is about the debug-key-signed build that gets sideloaded onto your own
 phone. The Play Store needs a `release` build signed with a **separate,
 private** upload key — never the committed debug key (Play rejects uploads
 signed with the well-known debug certificate outright).

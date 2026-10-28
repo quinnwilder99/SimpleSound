@@ -515,6 +515,7 @@ class PlaybackService : MediaSessionService() {
             // not used: on the Pixel it left playback stuck "playing" in silence
             // ~20 min into a screen-off session, with Play unable to recover it.
             .setWakeMode(C.WAKE_MODE_LOCAL)
+            .experimentalSetDynamicSchedulingEnabled(true)
             .build()
 
     /**

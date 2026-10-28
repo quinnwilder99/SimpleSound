@@ -1,24 +1,28 @@
 <#
 .SYNOPSIS
-    Build the debug APK and install it on the phone as an in-place UPDATE, keeping
+    Build the sideload APK and install it on the phone as an in-place UPDATE, keeping
     every playlist and all play history.
 
 .DESCRIPTION
     The only supported way to get a new build onto the phone. It:
-      1. Builds :app:assembleDebug, signed with the stable committed debug key
+      1. Builds :app:assembleSideload -- release-optimized and NOT debuggable (a
+         debuggable build burns far more CPU and heats the phone during long
+         playback) -- signed with the stable committed debug key
          (keystore/simplesound-debug.keystore) so the signature never changes.
       2. Compares the new APK's versionCode with the build on the phone and
          REFUSES to install anything not strictly higher (a downgrade needs -d
          or an uninstall, both of which wipe playlists + history).
       3. Runs "adb install -r" (reinstall, keep data). Never -d. Never uninstall.
       4. Verifies the phone now reports the new versionCode.
+      5. Compiles the app ahead of time (speed) so it runs at full speed
+         from the first launch instead of after the next idle-maintenance window.
     On a signature mismatch it STOPS instead of uninstalling your data.
 
 .PARAMETER Serial
     adb device serial, if more than one device/emulator is connected.
 
 .PARAMETER SkipBuild
-    Install the existing app/build/outputs/apk/debug/app-debug.apk, do not rebuild.
+    Install the existing app/build/outputs/apk/sideload/app-sideload.apk, do not rebuild.
 
 .PARAMETER Force
     Proceed even if data/schemas/ has uncommitted changes (only when a matching
@@ -37,7 +41,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $pkg = 'com.simplesound.app'
-$apk = Join-Path $repo 'app\build\outputs\apk\debug\app-debug.apk'
+$apk = Join-Path $repo 'app\build\outputs\apk\sideload\app-sideload.apk'
 
 function Fail([string[]]$lines) {
     Write-Host ''
@@ -130,10 +134,10 @@ if ($schemaChanged) {
 
 # ---- build --------------------------------------------------------
 if (-not $SkipBuild) {
-    Step 'Building :app:assembleDebug'
+    Step 'Building :app:assembleSideload'
     Push-Location $repo
     try {
-        & (Join-Path $repo 'gradlew.bat') :app:assembleDebug --console=plain
+        & (Join-Path $repo 'gradlew.bat') :app:assembleSideload --console=plain
         $gradleExit = $LASTEXITCODE
     } finally {
         Pop-Location
@@ -219,6 +223,17 @@ if (-not $mv.Success) {
     Write-Host '  WARNING: install reported Success but could not read the version back from the device.' -ForegroundColor Yellow
 } elseif ([int]$mv.Groups[1].Value -ne $newVc) {
     Fail "phone reports versionCode $($mv.Groups[1].Value) after install, expected $newVc."
+}
+
+# ---- ahead-of-time compile ---------------------------------
+# Not fatal: without it ART still compiles the app during the next idle+charging
+# maintenance window; this just makes the first sessions fast (and cool) too.
+Step 'Compiling ahead of time (speed)'
+$cmp = Invoke-Native $adb ($targetArgs + @('shell', 'cmd', 'package', 'compile', '-m', 'speed', '-f', $pkg))
+if ($cmp -match 'Success') {
+    Write-Host '  done.' -ForegroundColor Green
+} else {
+    Write-Host "  WARNING: compile did not report Success; ART will compile it later. $($cmp.Trim())" -ForegroundColor Yellow
 }
 
 Write-Host ''
