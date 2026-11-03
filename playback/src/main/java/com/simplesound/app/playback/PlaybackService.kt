@@ -515,7 +515,10 @@ class PlaybackService : MediaSessionService() {
             // not used: on the Pixel it left playback stuck "playing" in silence
             // ~20 min into a screen-off session, with Play unable to recover it.
             .setWakeMode(C.WAKE_MODE_LOCAL)
-            .experimentalSetDynamicSchedulingEnabled(true)
+            // No experimentalSetDynamicSchedulingEnabled: in Media3 1.4.1 it sleeps for half
+            // of "written but not yet heard", which includes the output's own latency. On
+            // Bluetooth (hundreds of ms) that outlasts the ~280 ms AudioTrack buffer, so it
+            // ran dry -- constant hiccups, worst on cheap earbuds. Costs ~4% of a core.
             .build()
 
     /**
