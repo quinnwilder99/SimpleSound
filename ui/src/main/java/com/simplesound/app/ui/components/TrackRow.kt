@@ -21,6 +21,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.simplesound.app.data.model.Track
@@ -35,6 +40,9 @@ import com.simplesound.app.data.model.Track
  *
  * [handleModifier] is applied to that drag-handle grip so the caller can make it a
  * reorder handle (press the grip and drag).
+ *
+ * [isCurrent] marks the track loaded in the player: accent-colored title, a faint
+ * accent wash and a small leading accent pill.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -45,9 +53,11 @@ fun TrackRow(
     modifier: Modifier = Modifier,
     selectionMode: Boolean = false,
     selected: Boolean = false,
+    isCurrent: Boolean = false,
     onLongClick: () -> Unit = {},
     handleModifier: Modifier = Modifier,
 ) {
+    val accent = MaterialTheme.colorScheme.primary
     Row(
         modifier =
             modifier
@@ -70,6 +80,28 @@ fun TrackRow(
                     bodyAlpha = if (selected) 0.16f else 0.05f,
                     showGloss = selected,
                     showRim = selected,
+                )
+                // Now-playing marker: a faint accent wash plus a short accent pill on
+                // the leading edge. Both are static draws (no animation, no frame
+                // loop), so it costs nothing once the row is drawn, and it sits inside
+                // the glass clip so it never bleeds onto neighbours. Skipped while the
+                // row is selected — the selected glass already owns the accent there.
+                .then(
+                    if (isCurrent && !selected) {
+                        Modifier.drawBehind {
+                            drawRect(accent.copy(alpha = 0.10f))
+                            val pillW = 3.dp.toPx()
+                            val pillH = size.height * 0.42f
+                            drawRoundRect(
+                                color = accent,
+                                topLeft = Offset(4.dp.toPx(), (size.height - pillH) / 2f),
+                                size = Size(pillW, pillH),
+                                cornerRadius = CornerRadius(pillW / 2f),
+                            )
+                        }
+                    } else {
+                        Modifier
+                    },
                 )
                 .combinedClickable(
                     onClick = onClick,
@@ -107,7 +139,8 @@ fun TrackRow(
             Text(
                 text = track.title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = if (isCurrent) accent else MaterialTheme.colorScheme.onBackground,
+                fontWeight = if (isCurrent) FontWeight.SemiBold else null,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

@@ -25,6 +25,7 @@ import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
+import com.simplesound.app.ui.rememberCurrentTrackId
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
 import com.simplesound.app.ui.components.AlphabetScrollbar
@@ -52,6 +53,7 @@ fun TracksScreen(
     active: Boolean = true,
 ) {
     val player = LocalPlayer.current
+    val currentTrackId by rememberCurrentTrackId()
     val context = LocalContext.current
     val allTracks by vm.tracks.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
@@ -146,6 +148,7 @@ fun TracksScreen(
                             modifier = Modifier.padding(end = rowEndInset),
                             selectionMode = selectionMode,
                             selected = selected,
+                            isCurrent = track.id == currentTrackId,
                             onLongClick = { toggleSelected(track.id) },
                             onClick = {
                                 if (selectionMode) {

@@ -61,6 +61,7 @@ import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
+import com.simplesound.app.ui.rememberCurrentTrackId
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.Artwork
 import com.simplesound.app.ui.components.PlaylistOptionsSheet
@@ -110,6 +111,7 @@ fun FavoritesScreen(
     active: Boolean = true,
 ) {
     val player = LocalPlayer.current
+    val currentTrackId = rememberCurrentTrackId()
     val playlists by vm.favoritesTabPlaylists.collectAsStateWithLifecycle()
 
     val pagerState = rememberPagerState { playlists.size }
@@ -148,6 +150,7 @@ fun FavoritesScreen(
                     playlist = playlist,
                     tracks = tracks,
                     pagerState = pagerState,
+                    currentTrackId = { currentTrackId.value },
                     onPlay = { index ->
                         player.playQueue(tracks, index, playlist.name)
                         vm.setLastPlayedPlaylist(playlist.id)
@@ -286,6 +289,7 @@ private fun LazyListScope.trackItems(
     playlist: Playlist,
     tracks: List<Track>,
     pagerState: PagerState,
+    currentTrackId: () -> Long?,
     onPlay: (index: Int) -> Unit,
     onMore: (Track) -> Unit,
 ) {
@@ -312,6 +316,8 @@ private fun LazyListScope.trackItems(
         TrackRow(
             track = track,
             modifier = Modifier.followSwap(pagerState),
+            // Read inside the item so a track change only recomposes visible rows.
+            isCurrent = track.id == currentTrackId(),
             onClick = { onPlay(index) },
             onMore = { onMore(track) },
         )

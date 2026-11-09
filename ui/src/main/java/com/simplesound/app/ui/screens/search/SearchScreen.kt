@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
+import com.simplesound.app.ui.rememberCurrentTrackId
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
 import com.simplesound.app.ui.components.SelectionActionBar
@@ -67,6 +68,7 @@ fun SearchScreen(
     onOpenNowPlaying: () -> Unit = {},
 ) {
     val player = LocalPlayer.current
+    val currentTrackId by rememberCurrentTrackId()
     val context = LocalContext.current
     val favoriteIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
     val userPlaylists by vm.userPlaylists.collectAsStateWithLifecycle()
@@ -223,6 +225,7 @@ fun SearchScreen(
                                 track = track,
                                 selectionMode = selectionMode,
                                 selected = selected,
+                                isCurrent = track.id == currentTrackId,
                                 onLongClick = { toggleSelected(track.id) },
                                 onClick = {
                                     if (selectionMode) {

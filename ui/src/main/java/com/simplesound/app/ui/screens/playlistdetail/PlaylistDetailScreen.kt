@@ -66,6 +66,7 @@ import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
+import com.simplesound.app.ui.rememberCurrentTrackId
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksPickerDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
@@ -101,6 +102,7 @@ fun PlaylistDetailScreen(
 ) {
     val context = LocalContext.current
     val player = LocalPlayer.current
+    val currentTrackId by rememberCurrentTrackId()
 
     // Re-read from the flows so name/cover/track edits reflect live. For a native
     // (computed) playlist like "Recently played"/"Most played", playlistById()
@@ -414,6 +416,7 @@ fun PlaylistDetailScreen(
                                 ),
                             selectionMode = selectionMode,
                             selected = selected,
+                            isCurrent = track.id == currentTrackId,
                             onLongClick = { toggleSelected(track.id) },
                             onClick = {
                                 if (selectionMode) {
