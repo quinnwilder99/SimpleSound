@@ -25,7 +25,6 @@ import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
-import com.simplesound.app.ui.rememberCurrentTrackId
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
 import com.simplesound.app.ui.components.AlphabetScrollbar
@@ -38,6 +37,7 @@ import com.simplesound.app.ui.components.TrackRow
 import com.simplesound.app.ui.components.TrackTagEditor
 import com.simplesound.app.ui.components.rememberTrackDeleter
 import com.simplesound.app.ui.components.rememberTrackTagEditor
+import com.simplesound.app.ui.rememberCurrentTrackId
 import com.simplesound.app.util.shareTrack
 
 /** Sort options offered for the flat Tracks list, i.e. everything except

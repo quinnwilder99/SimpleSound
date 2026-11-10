@@ -66,7 +66,6 @@ import com.simplesound.app.data.model.SortOption
 import com.simplesound.app.data.model.Track
 import com.simplesound.app.ui.AppViewModel
 import com.simplesound.app.ui.LocalPlayer
-import com.simplesound.app.ui.rememberCurrentTrackId
 import com.simplesound.app.ui.components.AddToPlaylistDialog
 import com.simplesound.app.ui.components.AddTracksPickerDialog
 import com.simplesound.app.ui.components.AddTracksToPlaylistDialog
@@ -83,6 +82,7 @@ import com.simplesound.app.ui.components.TrackRow
 import com.simplesound.app.ui.components.TrackTagEditor
 import com.simplesound.app.ui.components.liquidGlass
 import com.simplesound.app.ui.components.rememberTrackTagEditor
+import com.simplesound.app.ui.rememberCurrentTrackId
 import com.simplesound.app.util.CoverImageStore
 import com.simplesound.app.util.shareTracks
 import com.simplesound.app.util.trackCountLabel
