@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.PagerDefaults
@@ -129,7 +128,6 @@ fun FavoritesScreen(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val carouselHeight = maxHeight * 0.5f
         LazyColumn(
-            state = rememberLazyListState(),
             modifier = Modifier.fillMaxSize(),
             // Clears the global mini player floating over the bottom edge.
             contentPadding = PaddingValues(bottom = 96.dp),
@@ -165,16 +163,15 @@ fun FavoritesScreen(
     optionsFor?.let { pl ->
         FavoriteOptionsSheet(playlist = pl, vm = vm, onDismiss = { optionsFor = null })
     }
-    if (playlist != null) {
-        sheetTrack?.let { t ->
-            FavoriteTrackActions(
-                vm = vm,
-                playlist = playlist,
-                track = t,
-                onEditTags = { tagEditor.open(t) },
-                onDismiss = { sheetTrack = null },
-            )
-        }
+    val t = sheetTrack
+    if (playlist != null && t != null) {
+        FavoriteTrackActions(
+            vm = vm,
+            playlist = playlist,
+            track = t,
+            onEditTags = { tagEditor.open(t) },
+            onDismiss = { sheetTrack = null },
+        )
     }
 }
 
@@ -285,6 +282,7 @@ private fun Modifier.followSwap(pagerState: PagerState): Modifier =
         translationX = -f * 2f * SwapDrift.toPx()
     }
 
+@Suppress("LongParameterList")
 private fun LazyListScope.trackItems(
     playlist: Playlist,
     tracks: List<Track>,

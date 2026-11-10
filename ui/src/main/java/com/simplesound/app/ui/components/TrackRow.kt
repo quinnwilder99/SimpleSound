@@ -44,6 +44,7 @@ import com.simplesound.app.data.model.Track
  * [isCurrent] marks the track loaded in the player: accent-colored title, a faint
  * accent wash and a small leading accent pill.
  */
+@Suppress("LongMethod", "LongParameterList")
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun TrackRow(
